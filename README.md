@@ -1,7 +1,7 @@
 # 🦞 ClawSwarm - Multi-Agent Orchestration Framework
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.8.5-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.9.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
   <img src="https://img.shields.io/badge/tests-107%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-orange" alt="License">
@@ -115,7 +115,27 @@ docker compose up -d
 # Node Beta:   http://localhost:5172
 ```
 
----
+------
+
+## 💠 One-Command Orchestration
+
+```bash
+# Decompose task into sub-tasks, enqueue, and print spawn commands for AI
+python orchestrate.py "Search AI news and write a comparison report"
+
+# Interactive demo with 4 preset scenarios
+python demo.py
+
+# Run a specific preset scenario
+python demo.py --scenario ai-news
+
+# Custom task
+python demo.py --custom "Analyze MCP protocol and suggest implementation"
+```
+
+> Set `OPENAI_API_KEY` for LLM-powered task decomposition (GPT-4o-mini). Without it, a rule engine is used.
+
+
 
 ## 📖 Documentation
 

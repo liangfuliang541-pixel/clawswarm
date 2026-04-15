@@ -137,8 +137,38 @@ mcporter call clawswarm.clawswarm_spawn prompt="\u641c\u7d22 AI \u6700\u65b0\u8f
 | `scripts/spawn.py` | \u5199\u4efb\u52a1\u5230\u961f\u5217\uff0c\u8fd4\u56de task/result \u8def\u5f84 |
 | `scripts/poll.py` | \u8f6e\u8be2\u7b49\u5f85\u7ed3\u679c\u6587\u4ef6 |
 | `scripts/aggregate.py` | \u5408\u5e76\u591a\u4e2a\u7ed3\u679c\u6587\u4ef6 |
+| `orchestrate.py` | **一键编排主入口** — 分解+入队+打印 spawn 指令+轮询+聚合 |
+| `demo.py` | **交互演示** — 4 个预设场景 + 自定义任务 |
 
 ---
+
+## 方式 C：orchestrate.py 一键编排（推荐）
+
+**最适合 AI 驱动的复杂任务编排。** 一句话触发完整流程。
+
+```
+python orchestrate.py "搜索AI最新进展并写对比报告"
+```
+
+**AI 执行流程：**
+1. `orchestrate.py` 自动分解任务 → 写入 swarm_data/queue/
+2. AI 读取输出的 sessions_spawn() 指令，逐个 spawn 子龙虾
+3. 子龙虾执行完毕，结果写入 swarm_data/results/
+4. `orchestrate.py` 轮询收集结果 → 聚合输出
+
+**交互演示：**
+```
+python demo.py                    # 交互菜单
+python demo.py --scenario ai-news # 直接跑预设场景
+python demo.py --custom "你的任务" # 自定义
+```
+
+**环境变量：**
+- OPENAI_API_KEY — 设置后使用 LLM 智能分解（GPT-4o-mini），不设置用规则引擎
+
+---
+
+
 
 ## \u8bbe\u8ba1\u539f\u5219
 
