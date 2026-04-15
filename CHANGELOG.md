@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-04-15
+
+### Added
+- **`node_api.py`** (NEW): 节点 HTTP API 服务
+  - 每个节点运行轻量 HTTP 服务（默认 5171+ 端口）
+  - GET /status — 节点状态（能力/当前任务/运行时间）
+  - GET /health — 健康检查
+  - GET /tasks — 列出节点当前任务
+  - POST /poll — 节点主动拉取任务（能力匹配）
+  - POST /complete — 提交任务结果
+  - POST /execute — 主龙虾推送任务直接执行
+  - POST /shutdown — 优雅关闭
+  - 心跳线程（10 秒自动更新）
+  - 注册/注销节点到 agents/ 目录
+
+- **`master_api.py`** (NEW): 主龙虾 HTTP API 服务
+  - 主服务器运行 REST API（默认 5000 端口）
+  - CORS 支持，允许跨域访问
+  - **任务 API**: POST/GET/DELETE /tasks，GET /tasks/{id}/result，POST /tasks/{id}/retry
+  - **节点 API**: GET /nodes，GET /nodes/{id}，POST /nodes/{id}/assign，POST /nodes/{id}/wake
+  - **系统 API**: GET /health，GET /stats，POST /shutdown
+  - TaskRepo：基于文件系统，queue/in_progress/results 三层覆盖
+  - NodeRepo：agents/ 目录，支持在线状态检测（心跳 30 秒超时）
+
+- **CLI 升级**: 新增 `start-node-api` / `start-master-api` 命令
+
+### Testing
+- 新增 test_v050.py：15 个测试（node_api / master_api / API E2E）
+- 全量测试 64/64 全部通过
+
+---
+
+---
+
 ## [0.4.0] - 2026-04-15
 
 ### Added

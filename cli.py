@@ -254,6 +254,14 @@ def main():
     p = sub.add_parser("clean",      help="清理队列")
     p.add_argument("-f", "--force",  action="store_true")
 
+
+    p = sub.add_parser("start-node-api", help="Start node HTTP API server")
+    p.add_argument("node_id", nargs="?", help="Node ID (e.g. claw_alpha)")
+    p.add_argument("capabilities", nargs="*", help="Capabilities")
+
+    p = sub.add_parser("start-master-api", help="Start master HTTP API server")
+    p.add_argument("--port", "-p", type=int, default=5000)
+
     sub.add_parser("test",           help="运行单元测试")
 
     args = parser.parse_args(sys.argv[1:])
@@ -271,9 +279,49 @@ def main():
         "run":          cmd_run,
         "clean":        cmd_clean,
         "test":         cmd_test,
+        "start-node-api":   cmd_start_node_api,
+        "start-master-api": cmd_start_master_api,
     }
 
     return commands.get(args.cmd, lambda _: parser.print_help() or 1)(args)
+
+
+
+def cmd_start_node_api(args):
+    """启动节点 HTTP API 服务"""
+    node_id = args.node_id or input("Node ID: ").strip() or "claw_alpha"
+    capabilities = args.capabilities
+    if not capabilities:
+        import paths as p
+        from paths import CAPABILITY_MAP
+        print(f"可用能力: {', '.join(CAPABILITY_MAP.keys())}")
+        capabilities = input("Capabilities (comma-separated): ").strip().split(',')
+        capabilities = [c.strip() for c in capabilities if c.strip()]
+
+    print(f"Starting node API: {node_id} with {capabilities}")
+    import subprocess, sys
+    proc = subprocess.Popen(
+        [sys.executable, "node_api.py", node_id] + capabilities,
+        cwd=BASE_DIR,
+        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0
+    )
+    print(f"  PID {proc.pid}, port: 5171+")
+    return 0
+
+
+def cmd_start_master_api(args):
+    """启动主龙虾 HTTP API 服务"""
+    port = args.port
+    print(f"Starting master API on port {port}")
+    import subprocess, sys
+    proc = subprocess.Popen(
+        [sys.executable, "master_api.py", "--port", str(port)],
+        cwd=BASE_DIR,
+        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0
+    )
+    print(f"  PID {proc.pid}, http://localhost:{port}")
+    return 0
+
 
 
 if __name__ == "__main__":
