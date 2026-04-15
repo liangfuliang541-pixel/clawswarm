@@ -212,11 +212,22 @@ class TestOrchestrator:
         assert subs[0].type == "analyze"
 
     def test_classify_task(self):
+        """P0 修复：关键词匹配歧义 — 'write code' 应识别为 code 而非 report"""
         from orchestrator import classify_task
+        # 英文词边界测试
         assert classify_task("search X") == "fetch"
         assert classify_task("write report") == "report"
         assert classify_task("analyze data") == "analyze"
         assert classify_task("programming task") == "code"
+        assert classify_task("write code") == "code"          # P0: write 是 code 的前缀，不是独立词
+        assert classify_task("search for AI news") == "fetch"
+        # 中文自由子串测试
+        assert classify_task("帮我写代码") == "code"
+        assert classify_task("写报告") == "report"
+        assert classify_task("网页搜索") == "fetch"
+        assert classify_task("分析数据并生成报告") == "report"
+        assert classify_task("python编程实现") == "code"
+        assert classify_task("读这个文件") == "read"
 
     def test_result_aggregator_template(self):
         from orchestrator import ResultAggregator, SubTask
