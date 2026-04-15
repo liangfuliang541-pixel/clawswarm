@@ -11,6 +11,7 @@ ClawSwarm Executor - 任务执行引擎
 
 import json
 import os
+import sys
 import time
 import asyncio
 from datetime import datetime, timedelta
@@ -220,73 +221,192 @@ class TaskExecutor:
             raise ValueError(f"Unknown execution mode: {mode}")
     
     async def _execute_spawn(self, ctx: ExecutionContext, task: dict) -> Any:
-        """启动子 Agent"""
-        # 这里可以调用 sessions_spawn
-        # 由于是异步占位实现，实际需要根据具体环境调整
+        """启动子 Agent — 尝试调用 OpenClaw CLI，不可用则返回占位结果"""
         prompt = task.get("prompt", task.get("description", ""))
-        model = task.get("model", "default")
-        
-        # 模拟执行
-        await asyncio.sleep(0.1)
-        
+        # 无 prompt 不抛异常，降级为占位
+        if not prompt:
+            return {
+                "mode": "spawn",
+                "output": f"[placeholder] Spawn agent (no prompt provided)",
+                "executed_at": datetime.now().isoformat(),
+            }
+
+        # 尝试调用 openclaw CLI
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-c",
+                f"import subprocess, json; r = subprocess.run(['openclaw', 'exec', '--prompt', {repr(prompt)}], capture_output=True, text=True, timeout=60); print(r.stdout[-5000:] if r.stdout else r.stderr[-2000:])",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
+            if proc.returncode == 0 and stdout.strip():
+                return {
+                    "mode": "spawn",
+                    "prompt": prompt,
+                    "output": stdout.decode("utf-8", errors="replace")[-10000:],
+                    "executed_at": datetime.now().isoformat(),
+                    "via": "openclaw_cli",
+                }
+        except Exception:
+            pass  # openclaw 不可用，降级
+
+        # 降级：模拟返回（未来接入 sessions_spawn API）
         return {
             "mode": "spawn",
             "prompt": prompt,
-            "model": model,
+            "output": f"[placeholder] Spawn agent with prompt: {prompt[:200]}",
+            "note": "OpenClaw CLI not available. Configure openclaw for real agent execution.",
             "executed_at": datetime.now().isoformat(),
         }
     
     async def _execute_fetch(self, ctx: ExecutionContext, task: dict) -> Any:
-        """网页抓取"""
+        """网页抓取 — 真实实现"""
         url = task.get("url")
+        prompt = task.get("prompt", task.get("description", ""))
+
+        # 如果没给 url 但有 prompt，尝试用 prompt 当 url
+        if not url and prompt:
+            url = prompt.strip()
+
         if not url:
             raise ValueError("URL is required for fetch mode")
-        
-        max_chars = task.get("max_chars", 10000)
-        
-        # 这里可以调用 web_fetch
-        # 模拟执行
-        await asyncio.sleep(0.1)
-        
-        return {
-            "mode": "fetch",
-            "url": url,
-            "max_chars": max_chars,
-            "fetched_at": datetime.now().isoformat(),
-        }
+
+        # 确保有 scheme
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+
+        max_chars = task.get("max_chars", 15000)
+        timeout = task.get("timeout_seconds", ctx.timeout_seconds)
+
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=timeout),
+                    headers={"User-Agent": "ClawSwarm/0.2 (+https://github.com/liangfuliang541-pixel/clawswarm)"},
+                ) as resp:
+                    text = await resp.text(errors="replace")
+                    # 简易 HTML → 纯文本
+                    text = self._strip_html(text)
+                    return {
+                        "mode": "fetch",
+                        "url": url,
+                        "status_code": resp.status,
+                        "content": text[:max_chars],
+                        "length": len(text),
+                        "fetched_at": datetime.now().isoformat(),
+                    }
+        except ImportError:
+            # fallback: urllib
+            import urllib.request
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "ClawSwarm/0.2 (+https://github.com/liangfuliang541-pixel/clawswarm)"
+            })
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                text = self._strip_html(raw)
+                return {
+                    "mode": "fetch",
+                    "url": url,
+                    "status_code": resp.status,
+                    "content": text[:max_chars],
+                    "length": len(text),
+                    "fetched_at": datetime.now().isoformat(),
+                }
+
+    @staticmethod
+    def _strip_html(html: str) -> str:
+        """简易 HTML → 纯文本（去标签，保留段落结构）"""
+        import re
+        # 去掉 script/style
+        text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # 标签 → 换行
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</?(p|div|h[1-6]|li|tr)[^>]*>', '\n', text, flags=re.IGNORECASE)
+        # 去掉所有标签
+        text = re.sub(r'<[^>]+>', '', text)
+        # 解码常见 HTML 实体
+        text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        text = text.replace('&quot;', '"').replace('&#39;', "'").replace('&nbsp;', ' ')
+        # 合并空白
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
     
     async def _execute_exec(self, ctx: ExecutionContext, task: dict) -> Any:
-        """系统命令执行"""
+        """系统命令执行 — 真实实现"""
         command = task.get("command")
         if not command:
             raise ValueError("Command is required for exec mode")
-        
+
         cwd = task.get("cwd")
-        env = task.get("env", {})
-        
-        # 模拟执行
-        await asyncio.sleep(0.1)
-        
+        timeout = task.get("timeout_seconds", ctx.timeout_seconds)
+
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise TimeoutError(f"Command timed out after {timeout}s: {command[:80]}")
+
+        stdout_text = stdout.decode("utf-8", errors="replace")
+        stderr_text = stderr.decode("utf-8", errors="replace")
+
         return {
             "mode": "exec",
             "command": command,
-            "cwd": cwd,
+            "exit_code": proc.returncode,
+            "stdout": stdout_text[-10000:],  # 截断防止爆炸
+            "stderr": stderr_text[-5000:],
             "executed_at": datetime.now().isoformat(),
         }
     
     async def _execute_python(self, ctx: ExecutionContext, task: dict) -> Any:
-        """Python 代码执行"""
+        """Python 代码执行 — 真实实现"""
         code = task.get("code")
         if not code:
             raise ValueError("Code is required for python mode")
-        
-        # 注意：实际执行 Python 代码需要沙箱环境
-        # 这里仅做模拟
-        await asyncio.sleep(0.1)
-        
+
+        timeout = task.get("timeout_seconds", ctx.timeout_seconds)
+
+        loop = asyncio.get_event_loop()
+        output_capture = {"stdout": "", "stderr": ""}
+
+        def _run():
+            import io, sys, contextlib
+            stdout_buf = io.StringIO()
+            stderr_buf = io.StringIO()
+
+            namespace = {"__builtins__": __builtins__, "result": None}
+            try:
+                with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+                    exec(code, namespace)
+                output_capture["stdout"] = stdout_buf.getvalue()[-10000:]
+                output_capture["stderr"] = stderr_buf.getvalue()[-5000:]
+                output_capture["result"] = namespace.get("result")
+            except Exception as e:
+                output_capture["stderr"] = stderr_buf.getvalue()[-5000:]
+                raise
+
+        try:
+            await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Python code timed out after {timeout}s")
+
         return {
             "mode": "python",
-            "code_preview": code[:100] + "..." if len(code) > 100 else code,
+            "result": output_capture.get("result"),
+            "stdout": output_capture["stdout"],
+            "stderr": output_capture["stderr"],
             "executed_at": datetime.now().isoformat(),
         }
     

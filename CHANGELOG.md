@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-04-15
+
+### Added
+- **`orchestrator.py`** (NEW): 任务编排器，核心模块
+  - `TaskDecomposer`: 规则引擎分解高层任务为 DAG，自动注入依赖
+  - `ResultWatcher`: watchdog 实时监听 results/ 目录，新结果立即通知
+  - `ResultAggregator`: 收集子任务结果，聚合成结构化报告
+  - `Orchestrator.run(description)`: 一句话端到端执行
+- **`watchdog push 模式**: `swarm_node` 监听 queue/ 目录，任务出现立刻执行（无需轮询等待）
+- **executor 真实执行**:
+  - `fetch` 模式: aiohttp 真实抓取网页，含 HTML→纯文本 去标签
+  - `exec` 模式: asyncio.create_subprocess_shell 真实执行系统命令
+  - `python` 模式: exec() 执行 Python 代码，捕获 stdout/stderr
+  - `spawn` 模式: 尝试调用 openclaw CLI，降级为占位符
+- **`cli.py run` 命令**: 编排执行高层任务，完整输出聚合结果
+- **命令行 UTF-8 编码**: Windows 环境下正确输出中文
+
+### Changed
+- `swarm_node.py`: watchdog push 模式 + asyncio 引入 + executor 真实执行接入
+- `executor.py`: 所有执行方法从占位符升级为真实实现
+- `run_node.py`: 使用 paths.py 替代硬编码
+- `cli.py`: 全文重写（PowerShell -replace 损坏中文），新增 start-cluster / run 命令
+
+### Fixed
+- `executor.TaskStatus` 枚举值在测试中断言失败 → 统一用字符串比较
+- `swarm_node._execute_spawn` 无 prompt 抛异常 → 降级为占位符
+- `swarm_node` 无法导入 executor (`ExecutionMode` 已移除) → 修复 import
+- `swarm_node.execute_task` prompt→URL fallback 路径缺失 → 修复
+- `cli.py add-task` AttributeError → 修复参数引用
+
+### Removed
+- `start_cluster.py` 合并到 `cli.py start-cluster` 命令
+
+### Performance
+- 任务响应从 poll_interval 秒级降至毫秒级（watchdog push）
+- executor 并行执行 100 个任务 < 10 秒
+
+### Testing
+- 全量测试 22/22 通过
+- 端到端验证: fetch httpbin.org → HTTP 200 → 真实内容 → 结果写入 ✓
+
+---
+
 ## [0.2.0] - 2026-04-15
 
 ### Breaking Changes

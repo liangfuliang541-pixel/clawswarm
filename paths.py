@@ -61,9 +61,9 @@ def ensure_dirs():
 CAPABILITY_MAP = {
     "research":  ["search", "analyze", "report"],
     "code":      ["code", "write"],
+    "fetch":     ["search"],            # 抓取网页，节点有 search 即可
     "write":     ["write"],
     "read":      ["read"],
-    "fetch":     ["search", "web_fetch"],
     "report":    ["report", "write"],
     "analyze":   ["analyze"],
     "general":   ["*"],

@@ -4,7 +4,8 @@ import os, sys, time, json, uuid, subprocess, threading
 os.environ["PYTHONIOENCODING"] = "utf-8"
 os.environ["PYTHONUTF8"] = "1"
 
-BASE = r"D:\claw\swarm"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import BASE_DIR, AGENTS_DIR
 
 if len(sys.argv) < 2:
     print("Usage: python run_node.py <node_id> [capability1] ...")
@@ -15,11 +16,11 @@ caps = sys.argv[2:] or ["general"]
 
 # Launch node in background with UTF-8 encoding forced
 proc = subprocess.Popen(
-    [sys.executable, os.path.join(BASE, "swarm_node.py"), node_id] + caps,
+    [sys.executable, os.path.join(BASE_DIR, "swarm_node.py"), node_id] + caps,
     env={**os.environ, "PYTHONIOENCODING": "utf-8"},
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
-    cwd=BASE
+    cwd=BASE_DIR
 )
 
 print(f"Node [{node_id}] started as PID {proc.pid}")
@@ -28,8 +29,7 @@ print(f"Node [{node_id}] started as PID {proc.pid}")
 time.sleep(6)
 
 # Check agents directory
-agents_dir = os.path.join(BASE, "agents")
-agent_file = os.path.join(agents_dir, f"{node_id}.json")
+agent_file = os.path.join(AGENTS_DIR, f"{node_id}.json")
 if os.path.exists(agent_file):
     data = json.load(open(agent_file, encoding="utf-8"))
     print(f"Node registered: status={data.get('status')}, heartbeat={data.get('last_heartbeat','')[:19]}")

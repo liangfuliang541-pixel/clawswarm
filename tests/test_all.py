@@ -230,7 +230,7 @@ class TestExecutor:
         result = await exec_obj.execute(task)
         
         assert result.task_id == "test_001"
-        assert result.status == executor.TaskStatus.DONE
+        assert result.status == "done"
     
     @pytest.mark.asyncio
     async def test_execute_parallel(self):
@@ -245,9 +245,9 @@ class TestExecutor:
         ]
         
         results = await exec_obj.execute_parallel(tasks)
-        
+
         assert len(results) == 5
-        assert all(r.status == executor.TaskStatus.DONE for r in results)
+        assert all(r.status == "done" for r in results)
     
     @pytest.mark.asyncio
     async def test_workflow(self):
@@ -267,7 +267,7 @@ class TestExecutor:
         
         result = await exec_obj.execute(task)
         
-        assert result.status == executor.TaskStatus.DONE
+        assert result.status == "done"
         assert result.output["mode"] == "workflow"
         assert result.output["steps"] == 2
 
@@ -425,7 +425,7 @@ class TestIntegration:
         exec_obj = executor.TaskExecutor()
         result = await exec_obj.execute(task)
         
-        assert result.status == executor.TaskStatus.DONE
+        assert result.status == "done"
         
         # 4. 完成任务
         swarm_node.complete_task(task["id"], result.output, "test_node")

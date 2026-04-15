@@ -1,12 +1,13 @@
 """
-ClawSwarm - 节点龙虾客户端 v4
-新增：Guard 隔离模块集成
+ClawSwarm - 节点龙虾客户端 v5
+新增：watchdog push 模式（有任务立刻执行）+ executor 真实执行
 
 用法: python swarm_node.py <node_id> [capability1] [capability2] ...
 """
 
-import json, os, time, sys, shutil
+import json, os, time, sys, shutil, asyncio
 import fnmatch
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,14 @@ from paths import (
     BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR,
     AGENTS_DIR, LOGS_DIR, AUDIT_LOG_FILE, can_node_handle,
 )
+
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    HAS_WATCHDOG = True
+except ImportError:
+    HAS_WATCHDOG = False
+
 MAX_RUNTIME_SEC = 300  # 默认每个节点最多跑5分钟
 
 # ── Guard 安全模块（延迟导入）────────────────────────────────────────────
@@ -29,6 +38,37 @@ def _get_guard():
         except ImportError:
             _GUARD_AVAILABLE = False
     return _GUARD_AVAILABLE
+
+
+# ── Watchdog Push 模式 ───────────────────────────────────────────────────────
+
+class QueueFileHandler(FileSystemEventHandler if HAS_WATCHDOG else object):
+    """
+    监听 queue/ 目录，新任务文件出现时立刻触发 poll。
+    配合主循环的 threading.Event 实现 push 通知。
+    """
+
+    def __init__(self, node_id, capabilities):
+        self.node_id = node_id
+        self.capabilities = capabilities
+        self.trigger = threading.Event()
+
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith(".json"):
+            # 通知主循环有新任务
+            self.trigger.set()
+
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith(".json"):
+            self.trigger.set()
+
+    def reset(self):
+        self.trigger.clear()
+
 
 # ── 工具函数 ─────────────────────────────────────────────────────────────────
 
@@ -209,8 +249,7 @@ def execute_task(task, node_id):
 
     # 尝试使用 executor 模块执行
     try:
-        import asyncio
-        from executor import TaskExecutor, ExecutionMode
+        from executor import TaskExecutor
 
         executor = TaskExecutor(default_timeout=task.get("timeout_seconds", 300))
 
@@ -226,15 +265,19 @@ def execute_task(task, node_id):
         }
         exec_mode = mode_map.get(task_type, task_mode or "spawn")
 
+        # 从 task 对象提取执行参数（优先 metadata，fallback 到 task 顶层字段）
+        meta = task.get("metadata", {}) or {}
+        prompt = task.get("prompt", task.get("description", ""))
+
         exec_task = {
             "id":       task_id,
             "mode":     exec_mode,
-            "prompt":   desc,
+            "prompt":   prompt,
             "type":     task_type,
             "node_id":  node_id,
-            "url":      task.get("metadata", {}).get("url"),
-            "command":  task.get("metadata", {}).get("command"),
-            "code":     task.get("metadata", {}).get("code"),
+            "url":      meta.get("url") or (prompt if exec_mode == "fetch" else None),
+            "command":  meta.get("command") or task.get("command"),
+            "code":     meta.get("code") or task.get("code"),
             "timeout":  task.get("timeout_seconds", 300),
         }
 
@@ -242,7 +285,7 @@ def execute_task(task, node_id):
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(executor.execute(exec_task))
-            output = result.output if result.output else f"[OK] {desc[:80]}"
+            output = result.output if result.output is not None else f"[OK] {desc[:80]}"
         finally:
             loop.close()
 
@@ -265,6 +308,25 @@ def run_node(node_id, capabilities, poll_interval=5, max_runtime=None):
     write_heartbeat(node_id, capabilities, status="online")
     log(f"[BOOT] Node [{node_id}] online, capabilities={capabilities}")
 
+    # ── Push 模式：watchdog 监听队列目录 ────────────────────────────────
+    observer = None
+    file_handler = None
+    poll_func = lambda: poll_task(node_id, capabilities)
+
+    if HAS_WATCHDOG:
+        try:
+            file_handler = QueueFileHandler(node_id, capabilities)
+            observer = Observer()
+            observer.schedule(file_handler, QUEUE_DIR, recursive=False)
+            observer.daemon = True
+            observer.start()
+            log(f"[PUSH] Watchdog active on {QUEUE_DIR} — instant task pickup")
+        except Exception as e:
+            log(f"[WARN] Watchdog failed ({e}), falling back to polling")
+
+    # ── 主循环 ──────────────────────────────────────────────────────────
+    poll_counter = 0
+
     while True:
         # 超时退出
         if max_runtime and (time.time() - start_time) > max_runtime:
@@ -272,31 +334,57 @@ def run_node(node_id, capabilities, poll_interval=5, max_runtime=None):
             break
 
         # 发送心跳
-        write_heartbeat(node_id, capabilities, status="idle")
+        write_heartbeat(node_id, capabilities,
+                        status="idle" if task_count == 0 or task_count % 4 else "busy",
+                        current_task_id=None)
 
-        # 抢占任务（传入能力列表做过滤）
-        task = poll_task(node_id, capabilities)
+        # ── 任务抢占 ──────────────────────────────────────────────────
+        task = poll_func()
 
         if task:
-            # 更新心跳为忙碌状态
+            # 更新心跳为忙碌
             write_heartbeat(node_id, capabilities,
                            status="busy",
                            current_task_id=task["id"])
 
             task_count += 1
-            log(f"[WORK] [{task['id']}]: {task.get('description','')[:60]}")
+            log(f"[WORK] [{task['id']}]: {task.get('description', '')[:60]}")
 
             try:
                 result = execute_task(task, node_id)
                 complete_task(task["id"], result, node_id)
             except Exception as e:
                 fail_task(task["id"], str(e), node_id)
-        else:
-            # 无任务时降低日志频率（每12轮打一次）
-            if task_count == 0 or task_count % 12 == 0:
-                log(f"[IDLE] [{node_id}] waiting... (completed={task_count})")
 
-        time.sleep(poll_interval)
+            # 重置 watchdog trigger（如果使用了 push 模式）
+            if file_handler:
+                file_handler.reset()
+
+        else:
+            # 无任务：进入等待
+            if HAS_WATCHDOG and file_handler:
+                # Push 模式：最多等 poll_interval 秒，或等 watchdog 通知
+                # 等待时每 500ms 检查一次是否超时
+                waited = 0
+                while waited < poll_interval:
+                    # wait(timeout) 返回 True 表示被触发，False 表示超时
+                    triggered = file_handler.trigger.wait(timeout=0.5)
+                    if triggered:
+                        file_handler.reset()
+                        break  # 被触发，立刻去 poll
+                    waited += 0.5
+            else:
+                # Fallback：纯轮询
+                time.sleep(poll_interval)
+                poll_counter += 1
+                if poll_counter % 24 == 0:  # 每约2分钟打一次
+                    log(f"[IDLE] [{node_id}] waiting... (completed={task_count})")
+
+    # ── 清理 ──────────────────────────────────────────────────────────────
+    if observer:
+        observer.stop()
+        observer.join(timeout=3)
+    log(f"[EXIT] Node [{node_id}] stopped — completed={task_count} tasks")
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────
 
