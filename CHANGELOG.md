@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`orchestrate.py`** (NEW): 统帅千军万马主入口脚本
+- **`demo.py`** (NEW): 交互演示脚本 — 4 个预设场景 + 自定义任务，完整结果显示
   - 一句话触发多龙虾并行 spawn → watchdog 收集结果 → 聚合输出
   - 支持 `--timeout` / `--parallel` / `--dry-run` 参数
   - 实测：分解"搜索AI最新进展并写报告" → 2个子任务 → sessions_spawn → 结果写入
