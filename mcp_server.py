@@ -193,25 +193,25 @@ def setup_tools(server: MCPStdioServer):
         }
 
     server.register_tool("clawswarm_spawn", {
-        "description": "启动一个 ClawSwarm 子龙虾执行任务。写入任务文件到队列，返回 task_id 和结果文件路径。",
+        "description": "Launch a ClawSwarm sub-agent task. Writes task file to queue, returns task_id and result file path.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "prompt": {
                     "type": "string",
-                    "description": "任务描述（自然语言）",
+                    "description": "Task description (natural language)",
                 },
                 "label": {
                     "type": "string",
-                    "description": "唯一标签（用于结果聚合）",
+                    "description": "Unique label (for result aggregation)",
                 },
                 "timeout": {
                     "type": "number",
-                    "description": "超时秒数（默认300）",
+                    "description": "Timeout seconds (default 300)",
                 },
                 "priority": {
                     "type": "number",
-                    "description": "优先级1-10（默认5）",
+                    "description": "Priority 1-10 (default 5)",
                 },
             },
             "required": ["prompt"],
@@ -251,17 +251,17 @@ def setup_tools(server: MCPStdioServer):
         }
 
     server.register_tool("clawswarm_poll", {
-        "description": "轮询等待指定标签的结果文件出现并读取结果。",
+        "description": "Poll for result file matching the given label.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "label": {
                     "type": "string",
-                    "description": "任务标签（匹配结果文件）",
+                    "description": "Task label (matches result files)",
                 },
                 "timeout": {
                     "type": "number",
-                    "description": "轮询超时秒数（默认300）",
+                    "description": "Poll timeout seconds (default 300)",
                 },
             },
             "required": ["label"],
@@ -302,21 +302,21 @@ def setup_tools(server: MCPStdioServer):
         }
 
     server.register_tool("clawswarm_submit", {
-        "description": "提交任务到队列（不等待结果）。返回 task_id。",
+        "description": "Submit task to queue (no wait). Returns task_id.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "prompt": {
                     "type": "string",
-                    "description": "任务描述",
+                    "description": "Task description",
                 },
                 "mode": {
                     "type": "string",
-                    "description": "执行模式：spawn/fetch/exec/python（默认spawn）",
+                    "description": "Execution mode: spawn/fetch/exec/python (default spawn)",
                 },
                 "priority": {
                     "type": "number",
-                    "description": "优先级1-10（默认5）",
+                    "description": "Priority 1-10 (default 5)",
                 },
             },
             "required": ["prompt"],
@@ -340,7 +340,7 @@ def setup_tools(server: MCPStdioServer):
             return {"error": str(e)}
 
     server.register_tool("clawswarm_status", {
-        "description": "获取 ClawSwarm 集群整体状态（节点数/在线数/指标）。",
+        "description": "Get ClawSwarm cluster overall status (nodes/metrics).",
         "inputSchema": {
             "type": "object",
             "properties": {},
@@ -356,18 +356,17 @@ def setup_tools(server: MCPStdioServer):
             status = monitor.get_status()
             return status.get("nodes", {})
         except ImportError:
-            # Fallback: 列出 queue 目录中的节点信息
             return {
                 "total": 0,
                 "online": 0,
                 "list": [],
-                "note": "Monitor not available, returning empty node list",
+                "note": "Monitor not available",
             }
         except Exception as e:
             return {"error": str(e)}
 
     server.register_tool("clawswarm_nodes", {
-        "description": "列出所有 ClawSwarm 节点及其状态。",
+        "description": "List all ClawSwarm nodes and their status.",
         "inputSchema": {
             "type": "object",
             "properties": {},
@@ -407,19 +406,140 @@ def setup_tools(server: MCPStdioServer):
         }
 
     server.register_tool("clawswarm_aggregate", {
-        "description": "读取多个标签对应的结果文件，聚合为一个输出。",
+        "description": "Read multiple label-matched result files and aggregate.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "labels": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "结果标签列表",
+                    "description": "Result label list",
                 },
             },
             "required": ["labels"],
         },
     }, handle_aggregate)
+
+    # 7. clawswarm_dead_letter — 死信队列
+    def handle_dead_letter(args: dict) -> dict:
+        """查看/重试/清理死信队列"""
+        action = args.get("action", "list")
+        reason = args.get("reason")
+        entry_id = args.get("entry_id")
+        limit = args.get("limit", 20)
+
+        try:
+            import dead_letter
+            if action == "list":
+                return dead_letter.list_entries(reason=reason, limit=limit)
+            elif action == "retry":
+                if not entry_id:
+                    return {"error": "entry_id required for retry"}
+                task_id = dead_letter.retry(entry_id)
+                return {"retried": True, "new_task_id": task_id} if task_id else {"error": "Entry not found"}
+            elif action == "purge":
+                count = dead_letter.purge(entry_id=entry_id, reason=reason)
+                return {"purged": count}
+            elif action == "stats":
+                return dead_letter.stats()
+            else:
+                return {"error": f"Unknown action: {action}. Use list/retry/purge/stats"}
+        except ImportError:
+            return {"error": "dead_letter module not available"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    server.register_tool("clawswarm_dead_letter", {
+        "description": "Manage dead letter queue (failed/timeout tasks). Actions: list, retry, purge, stats.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "retry", "purge", "stats"],
+                    "description": "DLQ action (default: list)",
+                },
+                "entry_id": {
+                    "type": "string",
+                    "description": "Specific entry ID (for retry/purge)",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Filter by reason (for list/purge)",
+                },
+                "limit": {
+                    "type": "number",
+                    "description": "Max entries to return (default 20)",
+                },
+            },
+        },
+    }, handle_dead_letter)
+
+    # 8. clawswarm_health — 节点健康评分
+    def handle_health(args: dict) -> dict:
+        """计算节点健康评分"""
+        node_id = args.get("node_id", "unknown")
+        cpu = args.get("cpu")
+        memory = args.get("memory")
+        success = args.get("successful_tasks", 0)
+        failed = args.get("failed_tasks", 0)
+        response_ms = args.get("avg_response_ms")
+
+        try:
+            import health_scorer
+            report = health_scorer.compute_health(
+                node_id=node_id,
+                cpu_percent=cpu,
+                memory_percent=memory,
+                successful_tasks=success,
+                failed_tasks=failed,
+                avg_response_ms=response_ms,
+            )
+            return {
+                "node_id": report.node_id,
+                "score": report.score,
+                "level": report.level,
+                "breakdown": report.breakdown,
+                "recommendation": report.recommendation,
+                "should_accept_tasks": report.should_accept_tasks,
+            }
+        except ImportError:
+            return {"error": "health_scorer module not available"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    server.register_tool("clawswarm_health", {
+        "description": "Compute node health score (0-100) with breakdown. Levels: healthy/degraded/warning/critical.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node_id": {
+                    "type": "string",
+                    "description": "Node ID",
+                },
+                "cpu": {
+                    "type": "number",
+                    "description": "CPU percent (0-100)",
+                },
+                "memory": {
+                    "type": "number",
+                    "description": "Memory percent (0-100)",
+                },
+                "successful_tasks": {
+                    "type": "number",
+                    "description": "Count of successful tasks",
+                },
+                "failed_tasks": {
+                    "type": "number",
+                    "description": "Count of failed tasks",
+                },
+                "avg_response_ms": {
+                    "type": "number",
+                    "description": "Average response time in ms",
+                },
+            },
+        },
+    }, handle_health)
 
 
 # ── Main ─────────────────────────────────────────────────────────────

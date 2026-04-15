@@ -1,5 +1,13 @@
 # 🦞 ClawSwarm - Multi-Agent Orchestration Framework
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v0.8.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
+  <img src="https://img.shields.io/badge/tests-84%25%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/license-AGPL%20v3-orange" alt="License">
+  <img src="https://img.shields.io/badge/MCP-2024--11--05-purple" alt="MCP">
+</p>
+
 <div align="center">
 
 **[English](README.md)** | **[中文](README_CN.md)** | **[About](ABOUT.md)**
@@ -36,20 +44,16 @@
 
 ## ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| 🦞 **Multi-Node Coordination** | One Master coordinates multiple Node Agents |
-| 🧠 **Smart Scheduling** | Auto-assign tasks based on node capabilities |
-| 📊 **Result Aggregation** | Collect and merge results from all nodes |
-| 💾 **Persistence** | File-based queue queue survives restarts |
-| 🌐 **Cross-Machine** | Works across LAN via shared storage |
-| 🔄 **Fault Tolerance** | Auto-retry failed tasks, stale task recovery |
-| 🔌 **OpenClaw Native** | Seamless OpenClaw Agent integration via sessions_spawn |
-| 🌍 **Bilingual** | Full English + Chinese documentation |
-| ⏸️ **Human-in-the-Loop** | Checkpoint approval for critical tasks |
-| 📡 **OpenTelemetry** | Distributed tracing + Prometheus metrics |
-| 🔔 **WebSocket Events** | Real-time task/checkpoint event streams |
-| 🚢 **Production Ready** | Dockerfile + docker-compose + deploy.sh |
+- 🦞 **Multi-Agent Orchestration** — Spawn and coordinate multiple AI agents in parallel
+- 🧠 **Capability-Aware Scheduling** — Tasks routed to agents based on their capabilities
+- 🔀 **DAG Workflows** — Build dependency graphs, execute in parallel where possible
+- 🤖 **MCP Server** — Expose ClawSwarm as MCP tools for other agents to call
+- 🖥️ **Web Dashboard** — Real-time monitoring with WebSocket event streaming
+- 📊 **OpenTelemetry** — Production-grade observability out of the box
+- 🔒 **Sandbox Security** — Path whitelisting, command blacklisting, audit logging
+- ✅ **HITL Checkpoint** — Human-in-the-loop approval for critical tasks
+- 🐳 **Docker Ready** — Full Docker + Docker Compose deployment support
+- 🔄 **Zero Dependencies** — File-based queue in Phase 1, no message broker needed
 
 ---
 

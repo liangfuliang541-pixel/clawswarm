@@ -1,5 +1,13 @@
 # 🦞 ClawSwarm - 多智能体协同框架
 
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v0.8.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
+  <img src="https://img.shields.io/badge/tests-84%25%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/license-AGPL%20v3-orange" alt="License">
+  <img src="https://img.shields.io/badge/MCP-2024--11--05-purple" alt="MCP">
+</p>
+
 <div align="center">
 
 *[English](README.md)* | *中文版* | *[关于](ABOUT_CN.md)*
@@ -35,22 +43,16 @@
 
 ## ✨ 特性
 
-| 特性 | 说明 |
-|------|------|
-| 🦞 **多节点协同** | 一个主 Agent 指挥多个节点 Agent |
-| 🧠 **智能调度** | 根据节点能力自动分配任务 |
-| 📊 **结果聚合** | 收集并合并所有节点的结果 |
-| 💾 **持久化** | 基于文件的队列，重启不丢失 |
-| 🌐 **跨机器** | 局域网共享存储，支持多机器 |
-| 🔄 **容错** | 失败任务自动重试，stale 任务自动恢复 |
-| 🔌 **OpenClaw 原生** | 通过 sessions_spawn 无缝集成 OpenClaw Agent |
-| 🌍 **双语支持** | 完整英文 + 中文文档 |
-| ⏸️ **人工审批** | 关键任务支持 HITL 检查点审批 |
-| 📡 **OpenTelemetry** | 分布式追踪 + Prometheus 指标 |
-| 🔔 **WebSocket 事件** | 实时任务/检查点事件推送 |
-| 🖥️ **Dashboard** | FastAPI + WebSocket 实时监控面板 |
-| 🤖 **MCP Server** | 让其他 Agent 通过 MCP 协议调用 ClawSwarm |
-| 🚢 **生产就绪** | Dockerfile + docker-compose + deploy.sh |
+- 🦞 **多智能体编排** — 并行调度和协调多个 AI Agent
+- 🧠 **能力感知调度** — 根据节点能力智能分配任务
+- 🔀 **DAG 工作流** — 构建依赖图，最大化并行执行
+- 🤖 **MCP Server** — 将 ClawSwarm 暴露为 MCP 工具供其他 Agent 调用
+- 🖥️ **Web 监控面板** — WebSocket 实时推送，监控集群状态
+- 📊 **OpenTelemetry** — 开箱即用的生产级可观测性
+- 🔒 **沙箱安全** — 路径白名单、命令黑名单、审计日志
+- ✅ **人工审批点** — 关键任务支持 HITL 人工确认
+- 🐳 **Docker 就绪** — 完整 Docker + Docker Compose 部署支持
+- 🔄 **零依赖** — Phase 1 采用文件队列，无需消息队列
 
 ---
 
