@@ -69,6 +69,7 @@ CAPABILITY_MAP = {
     "read":      ["read"],
     "report":    ["report", "write"],
     "analyze":   ["analyze"],
+    "shell":     ["shell"],             # Shell 命令执行（远程节点专有）
     "general":   ["*"],
 }
 

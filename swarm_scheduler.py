@@ -47,13 +47,18 @@ def log(msg):
 
 # ── 任务管理 ─────────────────────────────────────────────────────────────────
 
-def create_task(prompt, task_type="general", priority=1, metadata=None):
+def create_task(prompt, task_type="general", priority=1, metadata=None, task_id=None):
     """创建一个新任务并加入队列，自动匹配合适节点"""
-    task_id = f"t_{uuid.uuid4().hex[:12]}"
+    if task_id is None:
+        task_id = f"t_{uuid.uuid4().hex[:12]}"
 
-    # 能力感知调度：自动选择最佳节点
+    # 能力感知调度：自动选择最佳节点（本地+远程）
     online = get_online_nodes(STALE_THRESHOLD_SEC)
     best = find_best_node(task_type, online)
+
+    # 如果选中了远程节点，走远程调度路径
+    if best and best.get("is_remote"):
+        return create_task_for_remote_node(task_id, prompt, task_type, priority, best, metadata)
 
     task = {
         "id":          task_id,
@@ -77,6 +82,62 @@ def create_task(prompt, task_type="general", priority=1, metadata=None):
             f"caps={best.get('capabilities', [])}")
     else:
         log(f"[SCHED] {task_id} ({task_type}) -> unassigned (no capable node online)")
+
+    return task_id, task
+
+
+def create_task_for_remote_node(
+    task_id: str,
+    prompt: str,
+    task_type: str = "general",
+    priority: int = 1,
+    remote_node: dict = None,
+    metadata: dict = None,
+):
+    """
+    创建任务并调度到远程节点（通过 relay 执行，后台线程异步）。
+    任务完成后写入 results/r_{task_id}.json，orchestrator 的 ResultWatcher 会读取。
+    """
+    if remote_node is None:
+        return task_id, {"id": task_id, "error": "no remote node specified"}
+
+    node_id = remote_node["node_id"]
+    relay_url = remote_node.get("relay_url", "")
+
+    task = {
+        "id":          task_id,
+        "type":        task_type,
+        "description": prompt,
+        "prompt":      prompt,
+        "priority":    priority,
+        "status":      "pending",
+        "assigned_to": node_id,
+        "assigned_to_relay": relay_url,
+        "created_at":  datetime.now().isoformat(),
+        "retry_count": 0,
+        "max_retries": 3,
+        "timeout_seconds": TASK_TIMEOUT_SEC,
+        "metadata":    metadata or {},
+        "node_type":   "remote",
+    }
+
+    log(f"[SCHED] {task_id} ({task_type}) -> remote:{node_id} via relay")
+
+    # 后台线程：发送到远程 relay 并异步执行
+    try:
+        from relay_client import RemoteNode, exec_task_async_via_relay
+        node = RemoteNode(
+            node_id=node_id,
+            relay_url=relay_url,
+            name=remote_node.get("name"),
+            capabilities=remote_node.get("capabilities"),
+        )
+        # 异步执行，不阻塞调度器
+        exec_task_async_via_relay(task_id, prompt, node, timeout=TASK_TIMEOUT_SEC)
+    except Exception as e:
+        log(f"[SCHED] Remote exec failed for {task_id}: {e}")
+        task["status"] = "error"
+        task["error"] = str(e)
 
     return task_id, task
 
@@ -122,23 +183,44 @@ def get_task_result(task_id):
 # ── 节点管理 ─────────────────────────────────────────────────────────────────
 
 def get_online_nodes(threshold_sec=STALE_THRESHOLD_SEC):
-    """获取当前在线的节点列表"""
+    """获取当前在线的节点列表（本地 + 远程）"""
     now = datetime.now()
     online = []
-    if not os.path.exists(AGENTS_DIR):
-        return online
-    for fname in os.listdir(AGENTS_DIR):
-        if not fname.endswith(".json"):
-            continue
-        try:
-            agent = read_json(os.path.join(AGENTS_DIR, fname))
-            last_seen = datetime.fromisoformat(agent["last_heartbeat"])
-            age = (now - last_seen).total_seconds()
-            agent["heartbeat_age_sec"] = int(age)
-            if age < threshold_sec:
-                online.append(agent)
-        except Exception:
-            pass
+
+    # ── 本地节点 ──────────────────────────────────────────────────────────
+    if os.path.exists(AGENTS_DIR):
+        for fname in os.listdir(AGENTS_DIR):
+            if not fname.endswith(".json"):
+                continue
+            try:
+                agent = read_json(os.path.join(AGENTS_DIR, fname))
+                last_seen = datetime.fromisoformat(agent["last_heartbeat"])
+                age = (now - last_seen).total_seconds()
+                agent["heartbeat_age_sec"] = int(age)
+                if age < threshold_sec:
+                    online.append(agent)
+            except Exception:
+                pass
+
+    # ── 远程节点（通过 relay 连通性判断）────────────────────────────────────
+    try:
+        from relay_client import RemoteNodeManager
+        mgr = RemoteNodeManager()
+        for node_info in mgr.list_nodes():
+            if node_info.get("relay_reachable"):
+                # 远程节点没有本地 heartbeat，用注册时间判断
+                online.append({
+                    "node_id": node_info["node_id"],
+                    "name": node_info.get("name", node_info["node_id"]),
+                    "type": "remote",
+                    "capabilities": node_info.get("capabilities", []),
+                    "relay_url": node_info.get("relay_url", ""),
+                    "heartbeat_age_sec": 0,
+                    "is_remote": True,
+                })
+    except ImportError:
+        pass  # relay_client 不可用，跳过远程节点
+
     return online
 
 # ── 健康监测：回收超时任务 ──────────────────────────────────────────────────────

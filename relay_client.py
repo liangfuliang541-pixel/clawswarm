@@ -355,6 +355,91 @@ class RemoteNodeManager:
         return node.exec(command)
 
 
+# ── 远程任务执行器 ────────────────────────────────────────────────────────
+
+def create_task_via_relay(
+    task_id: str,
+    prompt: str,
+    node: "RemoteNode",
+    timeout: int = 60,
+) -> Dict[str, Any]:
+    """
+    在远程节点上执行 ClawSwarm 任务。
+
+    Args:
+        task_id:    任务ID（用于写入本地 results/ 目录）
+        prompt:     任务描述
+        node:       RemoteNode 实例
+        timeout:    执行超时（秒）
+
+    Returns:
+        dict: {"status": "ok"|"error"|"timeout"|"sent", "output": ..., "elapsed": ...}
+    """
+    start = time.time()
+
+    # 发送任务到远程节点
+    # Kimi Claw 上的 executor 会执行 python -c "exec(open('task.py').read())"
+    # 这里直接把 prompt 作为命令发过去
+    result = node.exec(prompt, wait=True, timeout=timeout)
+
+    # 写入本地 results/ 目录，供 orchestrator 的 ResultWatcher 读取
+    from paths import RESULTS_DIR
+    import os as _os
+    result_file = _os.path.join(RESULTS_DIR, f"r_{task_id}.json")
+    output_data = {
+        "task_id": task_id,
+        "status": result.get("status", "done"),
+        "result": result.get("output", ""),
+        "elapsed": result.get("elapsed", 0),
+        "node_type": "remote",
+        "node_id": node.node_id,
+    }
+    try:
+        with open(result_file, "w", encoding="utf-8") as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        pass  # 非关键错误，不影响返回
+
+    result["node_type"] = "remote"
+    result["node_id"] = node.node_id
+    return result
+
+
+def exec_task_async_via_relay(
+    task_id: str,
+    prompt: str,
+    node: "RemoteNode",
+    timeout: int = 60,
+) -> None:
+    """
+    后台线程执行远程任务（不阻塞 orchestrator 主流程）。
+    任务完成后自动写入 results/r_{task_id}.json。
+    """
+    import threading
+
+    def _run():
+        try:
+            create_task_via_relay(task_id, prompt, node, timeout)
+        except Exception as e:
+            from paths import RESULTS_DIR
+            import os as _os
+            result_file = _os.path.join(RESULTS_DIR, f"r_{task_id}.json")
+            try:
+                with open(result_file, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "task_id": task_id,
+                        "status": "error",
+                        "result": str(e),
+                        "node_type": "remote",
+                        "node_id": node.node_id,
+                    }, f, ensure_ascii=False)
+            except Exception:
+                pass
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+
 # ── 便捷函数 ─────────────────────────────────────────────────────────────
 
 def quick_exec(relay_url: str, command: str, wait: bool = True) -> Dict[str, Any]:
