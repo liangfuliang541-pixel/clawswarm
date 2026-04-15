@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`orchestrate.py`** (NEW): 统帅千军万马主入口脚本
 - **`demo.py`** (NEW): 交互演示脚本 — 4 个预设场景 + 自定义任务，完整结果显示
+
+### Fixed
+- **P0 `classify_task` 关键词匹配歧义**：修复 "write code" 被误判为 report 而非 code
+  - 从 report 关键词列表删除 "write"（与 code 列表 "code" 冲突）
+  - 添加 "report" 回 report 列表（唯一不重叠）
+  - CJK 关键词自由子串匹配 + 单字 2x 加成；英文关键词词边界匹配
+  - 同分时：最长匹配词 > 最后出现者优先
   - 一句话触发多龙虾并行 spawn → watchdog 收集结果 → 聚合输出
   - 支持 `--timeout` / `--parallel` / `--dry-run` 参数
   - 实测：分解"搜索AI最新进展并写报告" → 2个子任务 → sessions_spawn → 结果写入
