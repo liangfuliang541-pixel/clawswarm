@@ -1,0 +1,56 @@
+{
+  "schema": "claw-swarm/v1",
+  "version": "1.0.0",
+  "nodes": {
+    "agent_local": {
+      "node_id": "agent_local",
+      "capabilities": [
+        "read,write,search"
+      ],
+      "registered_at": "2026-04-14T13:49:49.144210",
+      "last_seen": "2026-04-14T13:49:49.144210"
+    },
+    "agent_test2": {
+      "node_id": "agent_test2",
+      "capabilities": [
+        "read",
+        "write"
+      ],
+      "registered_at": "2026-04-14T13:53:50.891319",
+      "last_seen": "2026-04-14T13:53:50.891319"
+    },
+    "claw_alpha": {
+      "node_id": "claw_alpha",
+      "capabilities": [
+        "search",
+        "write",
+        "code"
+      ],
+      "registered_at": "2026-04-14T13:56:48.261446",
+      "last_seen": "2026-04-14T13:56:48.261446"
+    },
+    "claw_beta": {
+      "node_id": "claw_beta",
+      "capabilities": [
+        "read",
+        "write"
+      ],
+      "registered_at": "2026-04-14T13:56:48.263448",
+      "last_seen": "2026-04-14T13:56:48.263448"
+    },
+    "claw_gamma": {
+      "node_id": "claw_gamma",
+      "capabilities": [
+        "search",
+        "analyze",
+        "report"
+      ],
+      "registered_at": "2026-04-14T13:56:48.264448",
+      "last_seen": "2026-04-14T13:56:48.264448"
+    }
+  },
+  "queue": [
+    "task_001_6f4928"
+  ],
+  "results_dir": "D:\\claw\\swarm\\results"
+}

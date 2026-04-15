@@ -1,0 +1,21 @@
+# ClawSwarm Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core
+watchdog>=3.0.0          # File system monitoring
+
+# Optional: Enhanced logging
+colorlog>=6.7.0          # Colored console output
+
+# Optional: HTTP server for remote nodes
+flask>=2.3.0             # REST API (future: remote node communication)
+websockets>=11.0         # WebSocket support (future: real-time updates)
+
+# Testing
+pytest>=7.4.0            # Unit testing
+pytest-cov>=4.1.0        # Code coverage
+
+# Development
+black>=23.0.0            # Code formatting
+flake8>=6.0.0            # Linting
+mypy>=1.4.0             # Type checking
