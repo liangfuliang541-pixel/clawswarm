@@ -154,6 +154,35 @@ docker compose up -d
 
 ---
 
+## 🖥️ Dashboard
+
+Web UI 监控面板，实时展示龙虾集群状态、任务 DAG、执行结果。
+
+```bash
+# 启动（自动连接 MonitorService）
+python dashboard/dashboard.py --port 5000
+
+# 打开浏览器
+# http://localhost:5000
+```
+
+**功能**：
+- 🐠 节点状态面板（在线/离线/心跳）
+- 📊 统计面板（节点数/在线数/待执行/已完成）
+- ➕ 自然语言提交任务（直接触发执行）
+- 🔀 任务 DAG 可视化（pending → running → success/failed）
+- 📡 实时事件流（WebSocket 推送）
+- 💬 任务列表 + 实时状态更新
+
+**API**：
+- `GET /api/status` — 集群整体状态
+- `GET /api/nodes` — 节点列表
+- `GET /api/tasks` — 任务历史
+- `POST /api/tasks` — 提交新任务
+- `WS /ws` — 实时 WebSocket 事件流
+
+---
+
 ## 🤝 Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
