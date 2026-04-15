@@ -50,11 +50,12 @@ PIPELINE_DIR    = os.path.join(BASE_DIR, "results", "pipelines")
 AGENTS_DIR      = os.path.join(BASE_DIR, "agents")
 LOGS_DIR        = os.path.join(BASE_DIR, "logs")
 AUDIT_LOG_FILE  = os.path.join(BASE_DIR, "audit.log")
+REMOTE_NODES_DIR = os.path.join(BASE_DIR, "remote_nodes")
 
 
 def ensure_dirs():
     """确保所有必要目录存在"""
-    for d in [QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR, DEAD_LETTER_DIR, PIPELINE_DIR, AGENTS_DIR, LOGS_DIR]:
+    for d in [QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR, DEAD_LETTER_DIR, PIPELINE_DIR, AGENTS_DIR, LOGS_DIR, REMOTE_NODES_DIR]:
         os.makedirs(d, exist_ok=True)
 
 

@@ -238,7 +238,7 @@ class TestMCPServer:
         import mcp_server
         server = mcp_server.MCPStdioServer()
         mcp_server.setup_tools(server)
-        assert len(server._tools) == 8
+        assert len(server._tools) == 11
         assert "clawswarm_dead_letter" in server._tools
         assert "clawswarm_health" in server._tools
 

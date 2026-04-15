@@ -541,6 +541,180 @@ def setup_tools(server: MCPStdioServer):
         },
     }, handle_health)
 
+    # 9. clawswarm_remote_exec — 跨公网节点执行
+    def handle_remote_exec(args: dict) -> dict:
+        """
+        通过 HTTP Relay 在远程 OpenClaw 节点上执行命令。
+        
+        用于跨公网节点控制（两台机器不在同一局域网时）。
+        原理：POST /cmd → 远程执行 → GET /result 取结果
+        
+        使用步骤：
+        1. 先调用 clawswarm_remote_register 注册节点
+        2. 再用本工具执行命令
+        """
+        node_id = args.get("node_id")
+        command = args.get("command", "")
+        relay_url = args.get("relay_url")
+        wait = args.get("wait", True)
+        timeout = args.get("timeout", 60)
+
+        if not command:
+            return {"error": "command is required"}
+
+        # 确定 relay_url
+        if relay_url:
+            relay = None
+            target_node_id = None
+        elif node_id:
+            try:
+                from relay_client import RemoteNodeManager, RemoteRelay
+                mgr = RemoteNodeManager()
+                node = mgr.get_node(node_id)
+                if not node:
+                    return {"error": f"Node not found: {node_id}. Use clawswarm_remote_register first."}
+                relay = node.relay
+                target_node_id = node_id
+            except ImportError:
+                return {"error": "relay_client module not available"}
+        else:
+            return {"error": "node_id or relay_url is required"}
+
+        try:
+            if relay:
+                result = relay.exec(command, wait=wait, poll_interval=2)
+            else:
+                relay = RemoteRelay(relay_url)
+                result = relay.exec(command, wait=wait, poll_interval=2)
+                target_node_id = "direct"
+
+            return {
+                "node_id": target_node_id,
+                "relay_url": relay.relay_url if relay else relay_url,
+                "status": result["status"],
+                "output": result["output"],
+                "elapsed_seconds": result["elapsed"],
+                "command": command,
+            }
+        except Exception as e:
+            return {"error": f"Relay error: {e}"}
+
+    server.register_tool("clawswarm_remote_exec", {
+        "description": "Execute command on a remote OpenClaw node via HTTP relay. "
+                       "Use clawswarm_remote_register first to register the node. "
+                       "Supports cross-network execution when nodes are not on the same LAN.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node_id": {
+                    "type": "string",
+                    "description": "Pre-registered node ID (from clawswarm_remote_register)",
+                },
+                "relay_url": {
+                    "type": "string",
+                    "description": "Direct relay URL (e.g. https://xxxx.serveo.net) if node_id not registered",
+                },
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to execute on the remote node",
+                },
+                "wait": {
+                    "type": "boolean",
+                    "description": "Wait for result (default True). Set False for fire-and-forget.",
+                },
+                "timeout": {
+                    "type": "number",
+                    "description": "Timeout in seconds (default 60)",
+                },
+            },
+            "required": ["command"],
+        },
+    }, handle_remote_exec)
+
+    # 10. clawswarm_remote_register — 注册远程节点
+    def handle_remote_register(args: dict) -> dict:
+        """将远程 OpenClaw 节点注册到 ClawSwarm 集群"""
+        node_id = args.get("node_id")
+        relay_url = args.get("relay_url")
+        name = args.get("name")
+        capabilities = args.get("capabilities", ["shell", "general"])
+
+        if not node_id or not relay_url:
+            return {"error": "node_id and relay_url are required"}
+
+        try:
+            from relay_client import RemoteNode
+            node = RemoteNode(
+                node_id=node_id,
+                relay_url=relay_url,
+                name=name or node_id,
+                capabilities=capabilities,
+            )
+            result = node.register()
+            # 测试连通性
+            if node.relay.ping():
+                result["connection_test"] = "ok"
+            else:
+                result["connection_test"] = "failed"
+            return result
+        except ImportError:
+            return {"error": "relay_client module not available"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    server.register_tool("clawswarm_remote_register", {
+        "description": "Register a remote OpenClaw node via HTTP relay tunnel. "
+                       "The relay must be set up on the remote node first (serveo.net SSH tunnel + relay script). "
+                       "After registration, use clawswarm_remote_exec to run commands on it.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node_id": {
+                    "type": "string",
+                    "description": "Unique node ID (e.g. kimi-claw-01)",
+                },
+                "relay_url": {
+                    "type": "string",
+                    "description": "HTTP relay public URL (e.g. https://xxxx.serveo.net)",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Display name for the node",
+                },
+                "capabilities": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Node capabilities (default: ['shell', 'general'])",
+                },
+            },
+            "required": ["node_id", "relay_url"],
+        },
+    }, handle_remote_register)
+
+    # 11. clawswarm_remote_list — 列出已注册远程节点
+    def handle_remote_list(args: dict) -> dict:
+        """列出所有已注册的远程节点"""
+        try:
+            from relay_client import RemoteNodeManager
+            mgr = RemoteNodeManager()
+            nodes = mgr.list_nodes()
+            return {
+                "total": len(nodes),
+                "nodes": nodes,
+            }
+        except ImportError:
+            return {"error": "relay_client module not available"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    server.register_tool("clawswarm_remote_list", {
+        "description": "List all registered remote nodes and their status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    }, handle_remote_list)
+
 
 # ── Main ─────────────────────────────────────────────────────────────
 
