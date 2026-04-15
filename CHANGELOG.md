@@ -13,9 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`mcp_server.py`** (NEW): MCP Server 实现 — 6个 MCP tools（spawn/poll/submit/status/nodes/aggregate）
-  - 基于 stdio 的 JSON-RPC 实现，符合 Anthropic MCP 协议
+  - 基于 stdio 的 JSON-RPC 实现，符合 Anthropic MCP 协议（protocolVersion: 2024-11-05）
   - 其他 Agent 可通过 MCP 协议调用 ClawSwarm
   - 核心定位：**让龙虾间互相调用工具**
+- **`skill/SKILL.md`** (UPDATED): MCP Server 集成到 Skill
+  - 新增方式 B：通过 `mcporter call clawswarm.*` 调用 MCP tools
+  - 方式 A（sessions_spawn）+ 方式 B（MCP）双模式编排
+  - 方式选择指南表
 - **`dashboard/`** (NEW): Web UI 监控面板
   - FastAPI + WebSocket 实时推送
   - 任务 DAG 可视化 + 节点状态 + 事件日志

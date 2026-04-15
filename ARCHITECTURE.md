@@ -339,3 +339,91 @@ Phase 4: 产品化
 3. **优先级：** 任务优先级如何影响分配顺序？
 4. **结果格式：** 统一用JSON还是支持多格式？
 5. **监控告警：** 任务失败/超时后如何通知？
+
+---
+
+## v0.8.0 New Architecture Components
+
+### MCP Server (mcp_server.py)
+
+```
+External Agent (Claude Code / Cursor / CodeBuddy)
+    |
+    | mcporter call clawswarm.*
+    v
++---------------------------+
+| ClawSwarm MCP Server      |
+| (stdio JSON-RPC)          |
+|                           |
+| clawswarm_spawn  ------> swarm_data/queue/
+| clawswarm_poll   <------ swarm_data/results/
+| clawswarm_submit ------> swarm_data/queue/
+| clawswarm_status <------ monitor.get_status()
+| clawswarm_nodes   <------ monitor.get_status()
+| clawswarm_aggregate <--- swarm_data/results/
++---------------------------+
+```
+
+Protocol: MCP 2024-11-05 (stdio transport)
+
+### Dashboard (dashboard/)
+
+```
+Browser
+    |
+    | HTTP / WebSocket
+    v
++---------------------------+
+| FastAPI Dashboard Server  |
+| :5000                     |
+|                           |
+| GET  /api/status  ------> monitor.get_status()
+| GET  /api/nodes   ------> monitor.get_nodes()
+| GET  /api/tasks   ------> swarm_data/results/
+| POST /api/tasks   ------> _execute_task_bg()
+| WS   /ws         ------> ConnectionManager
++---------------------------+
+         |                     |
+         v                     v
+    swarm_data/          MonitorService
+    (queue/results/)     (metrics/nodes)
+```
+
+### OpenClaw Skill Dual-Mode Orchestration
+
+```
+AI (Orchestrator Agent)
+    |
+    +---> sessions_spawn()       [Mode A: Full Agent]
+    |         |
+    |         v
+    |     Sub-lobster Alpha/Beta/Gamma (independent sessions)
+    |         |
+    |         v
+    |     swarm_data/results/spawn_*.json
+    |
+    +---> mcporter clawswarm.*   [Mode B: MCP Protocol]
+              |
+              v
+          MCP Server (mcp_server.py)
+              |
+              v
+          swarm_data/queue/ + swarm_data/results/
+    |
+    +---> scripts/aggregate.py --> final.json
+```
+
+### Tech Stack
+
+| Component | Stack |
+|-----------|-------|
+| Core Framework | Python 3.8+ |
+| Task Queue | File system (Phase 1) |
+| Execution Engine | asyncio + subprocess |
+| LLM Integration | openai/anthropic/gemini/ollama SDK |
+| MCP Server | stdio JSON-RPC (pure Python) |
+| Dashboard | FastAPI + uvicorn + WebSocket |
+| Monitoring | psutil + MetricsCollector |
+| Observability | OpenTelemetry |
+| CI/CD | GitHub Actions |
+| Tests | pytest (84 tests) |

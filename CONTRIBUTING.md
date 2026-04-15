@@ -90,10 +90,24 @@ python -m pytest tests/test_v060.py -v
 
 # With coverage
 python -m pytest tests/ --cov=. --cov-report=html
+
+# Test Dashboard
+python dashboard/dashboard.py --port 5000
+# Then visit http://localhost:5000/api/status
+
+# Test MCP Server
+python examples/04_mcp_demo.py
 ```
 
-All 84 tests must pass (including v0.6 checkpoint + observability tests).
-New modules must include tests in `tests/test_{module}.py`.
+All 84 tests must pass. New modules must include tests in `tests/test_{module}.py`.
+
+### Running Examples
+
+```bash
+python examples/01_quickstart.py   # Submit tasks + poll results
+python examples/02_parallel.py      # Parallel tasks + aggregation
+python examples/04_mcp_demo.py     # MCP protocol demo
+```
 
 ---
 

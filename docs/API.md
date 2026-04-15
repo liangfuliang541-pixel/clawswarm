@@ -307,3 +307,120 @@ while True:
     swarm_scheduler.recover_stale_tasks()
     time.sleep(10)
 ```
+
+
+---
+
+## MCP Server API
+
+ClawSwarm provides MCP (Model Context Protocol) interface for other agents.
+
+### Startup
+
+```bash
+python mcp_server.py
+```
+
+### Register with mcporter
+
+```json
+{
+  "mcpServers": {
+    "clawswarm": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "/path/to/clawswarm"
+    }
+  }
+}
+```
+
+### Tools
+
+#### clawswarm_spawn
+
+Launch a sub-lobster to execute a task.
+
+```bash
+mcporter call clawswarm.clawswarm_spawn prompt="Search AI news" label="news" timeout=120
+```
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| prompt | string | Yes | Task description (natural language) |
+| label | string | No | Unique label (for result aggregation) |
+| timeout | number | No | Timeout seconds (default 300) |
+| priority | number | No | Priority 1-10 (default 5) |
+
+#### clawswarm_poll
+
+Poll for result file.
+
+```bash
+mcporter call clawswarm.clawswarm_poll label="news" timeout=120
+```
+
+#### clawswarm_submit
+
+Submit task to queue.
+
+```bash
+mcporter call clawswarm.clawswarm_submit prompt="task" mode="spawn" priority=8
+```
+
+#### clawswarm_status
+
+Get cluster status.
+
+```bash
+mcporter call clawswarm.clawswarm_status
+```
+
+#### clawswarm_nodes
+
+List all nodes.
+
+```bash
+mcporter call clawswarm.clawswarm_nodes
+```
+
+#### clawswarm_aggregate
+
+Aggregate multiple result files.
+
+```bash
+mcporter call clawswarm.clawswarm_aggregate --args '{"labels":["research","write"]}'
+```
+
+---
+
+## Dashboard REST API
+
+Web UI monitoring panel REST API.
+
+### Startup
+
+```bash
+python dashboard/dashboard.py --port 5000
+```
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/status` | GET | Cluster status (with MonitorService data) |
+| `/api/nodes` | GET | Node list |
+| `/api/tasks` | GET | Task history (last 50) |
+| `/api/tasks` | POST | Submit new task (async execution) |
+| `/api/events` | GET | Event log |
+| `/ws` | WS | Real-time WebSocket event stream |
+
+#### POST /api/tasks
+
+```bash
+curl -X POST http://localhost:5000/api/tasks   -H "Content-Type: application/json"   -d '{"prompt": "Search latest AI news"}'
+```
+
+#### WS /ws
+
+WebSocket event stream. Event types: `task_created`, `task_started`, `task_completed`, `node_status_change`, `heartbeat`.

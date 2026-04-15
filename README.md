@@ -207,13 +207,26 @@ mcporter call --stdio -- python mcp_server.py clawswarm_spawn '{"prompt":"Hello"
 | `clawswarm_aggregate` | 聚合多个结果文件 |
 
 **在 OpenClaw Skill 中使用**：
-```python
-# 通过 mcporter 调用 MCP 服务器
-result = subprocess.run([
-    "mcporter", "call", "--stdio", "--",
-    "python", "mcp_server.py", "clawswarm_spawn",
-    '{"prompt":"Search latest AI news","label":"news"}'
-], capture_output=True)
+```bash
+# 方式 1：通过已注册的 mcporter server 直接调用
+mcporter call clawswarm.clawswarm_spawn prompt="Search latest AI news" label="news"
+
+# 方式 2：通过 --stdio 临时调用
+mcporter call --stdio -- python mcp_server.py clawswarm_spawn '{"prompt":"Hello"}'
+```
+
+**注册到 mcporter**（一次性）：
+```json
+// ~/.mcporter/mcporter.json
+{
+  "mcpServers": {
+    "clawswarm": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "/path/to/clawswarm"
+    }
+  }
+}
 ```
 
 ---

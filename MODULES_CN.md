@@ -2,7 +2,7 @@
 
 > 贡献者必读。本文档说明每个模块的职责、接口和设计决策。
 
-中文: [MODULES_CN.md](MODULES_CN.md) | 中文: [MODULES_CN.md](MODULES_CN.md)
+English: [MODULES.md](MODULES.md) | 中文: [MODULES_CN.md](MODULES_CN.md)
 
 ---
 
@@ -28,6 +28,19 @@ events.py                   # WebSocket 事件服务器
 webhook.py                  # Webhook 发送器
 node_api.py                 # 节点 HTTP API（:5171）
 master_api.py               # 主节点 HTTP API（:5000）
+mcp_server.py               # MCP Server：6 tools（spawn/poll/submit/status/nodes/aggregate）
+dashboard/
+├── dashboard.py            # Web UI 监控面板（FastAPI + WebSocket）
+└── __init__.py
+skill/
+├── SKILL.md                # OpenClaw Skill 定义（MCP + sessions_spawn 双模式编排）
+├── scripts/spawn.py        # 写任务到队列
+├── scripts/poll.py         # 轮询结果
+└── scripts/aggregate.py    # 聚合结果
+examples/
+├── 01_quickstart.py        # 快速上手示例
+├── 02_parallel.py          # 并行任务示例
+└── 04_mcp_demo.py          # MCP 协议调用示例
 ```
 
 ---
@@ -365,6 +378,67 @@ mypy .
 - 所有模块级函数和类必须有 docstring
 - 类型注解（可选但推荐）
 - 无 print，用 `from observability import log`
+
+---
+
+### `mcp_server.py` — MCP Server ⭐
+
+**职责**：将 ClawSwarm 暴露为 MCP (Model Context Protocol) 工具，供其他 Agent 调用。
+
+**协议**：stdio JSON-RPC（符合 Anthropic MCP 2024-11-05 规范）
+
+**MCP Tools**：
+
+| Tool | 作用 | 关键参数 |
+|------|------|---------|
+| `clawswarm_spawn` | 启动子龙虾，写入队列 | prompt, label?, timeout?, priority? |
+| `clawswarm_poll` | 轮询等待结果文件 | label, timeout? |
+| `clawswarm_submit` | 提交任务到队列 | prompt, mode?, priority? |
+| `clawswarm_status` | 集群整体状态 | — |
+| `clawswarm_nodes` | 节点列表 | — |
+| `clawswarm_aggregate` | 聚合多个结果 | labels[] |
+
+**集成方式**：
+```bash
+# 注册到 mcporter 后直接调用
+mcporter call clawswarm.clawswarm_status
+mcporter call clawswarm.clawswarm_submit prompt="task" priority=8
+```
+
+**设计决策**：
+- 选择 stdio 而非 HTTP，因为 MCP stdio 是最通用的传输方式
+- 不依赖外部包（纯 Python 标准库 + json）
+- 无 API Key 时优雅降级，返回 demo 数据
+
+---
+
+### `dashboard/dashboard.py` — Web UI 监控面板 🖥️
+
+**职责**：提供 Web UI 实时监控集群状态、任务 DAG、执行结果。
+
+**技术栈**：FastAPI + uvicorn + WebSocket，单 HTML 文件内嵌（零前端依赖）
+
+**REST API**：
+
+| 端点 | 方法 | 作用 |
+|------|------|------|
+| `/api/status` | GET | 集群整体状态 |
+| `/api/nodes` | GET | 节点列表 |
+| `/api/tasks` | GET/POST | 任务历史 / 提交新任务 |
+| `/ws` | WS | 实时事件流 |
+
+**UI 布局**：
+```
+┌──────────────┬────────────────────────────┬──────────────┐
+│ 🐠 节点面板   │  📊 统计 + DAG 可视化      │ 📋 任务列表   │
+│              │  ➕ 任务提交表单             │ 📡 事件日志   │
+└──────────────┴────────────────────────────┴──────────────┘
+```
+
+**设计决策**：
+- 集成 MonitorService：连接时显示 LIVE 模式，否则 DEMO 模式
+- DAG 用 CSS absolute 定位，无需额外图表库
+- WebSocket 3 秒断线重连 + 右下角连接指示灯
 
 ---
 

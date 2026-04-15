@@ -149,12 +149,16 @@ def poll_task(node_id, capabilities):
 
 | 优先级 | 任务 | 状态 |
 |--------|------|------|
-| P0 | 能力感知调度 | 待实现 |
-| P0 | 主龙虾 add_task 时分配节点 | 待实现 |
-| P0 | execute_task 接入真实能力 | 待实现 |
-| P1 | 多节点并行测试 | 待验证 |
-| P1 | 任务依赖链（后续任务A完成后触发B） | 待设计 |
-| P2 | 节点能力注册时自检 | 待实现 |
+| P0 | 能力感知调度 | ✅ 已完成 |
+| P0 | 主龙虾 add_task 时分配节点 | ✅ 已完成 |
+| P0 | execute_task 接入真实能力 | ✅ 已完成（fetch/exec/python/spawn） |
+| P1 | 多节点并行测试 | ✅ 已完成（84 tests） |
+| P1 | 任务依赖链（后续任务A完成后触发B） | ✅ 已完成（DAG orchestrator） |
+| P1 | MCP Server 协议通信 | ✅ 已完成（v0.8.0，6 tools） |
+| P1 | Web Dashboard 监控面板 | ✅ 已完成（v0.8.0，FastAPI + WebSocket） |
+| P1 | GitHub Actions CI/CD | ✅ 已完成（v0.8.0） |
+| P2 | 节点能力注册时自检 | ✅ 已完成 |
+| P2 | OpenClaw Skill 集成 | ✅ 已完成（v0.7.0） |
 
 ---
 

@@ -48,6 +48,8 @@
 | ⏸️ **人工审批** | 关键任务支持 HITL 检查点审批 |
 | 📡 **OpenTelemetry** | 分布式追踪 + Prometheus 指标 |
 | 🔔 **WebSocket 事件** | 实时任务/检查点事件推送 |
+| 🖥️ **Dashboard** | FastAPI + WebSocket 实时监控面板 |
+| 🤖 **MCP Server** | 让其他 Agent 通过 MCP 协议调用 ClawSwarm |
 | 🚢 **生产就绪** | Dockerfile + docker-compose + deploy.sh |
 
 ---
@@ -123,8 +125,9 @@ docker compose up -d
 | [🔌 API 参考](docs/API.md) | 命令行和 Python API |
 | [🚀 部署指南](docs/DEPLOY.md) | Docker 和本地部署 |
 | [🦞 关于](ABOUT_CN.md) | 项目故事、设计理念与发展路线 |
-| [🗺️ 模块索引](MODULES.md) | 代码库模块说明 |
+| [🗺️ 模块索引](MODULES_CN.md) | 代码库模块说明 |
 | [🧠 OpenClaw Skill](skill/) | 一键安装到 OpenClaw |
+| [🤖 MCP Server](mcp_server.py) | MCP 协议接入 |
 
 ---
 
@@ -148,6 +151,79 @@ docker compose up -d
 │  节点 1   │ │ 节点 2   │ │   节点 N    │
 │ (搜索)    │ │ (写作)   │ │   (代码)    │
 └───────────┘ └─────────┘ └─────────────┘
+```
+
+---
+
+## 🖥️ Dashboard
+
+Web UI 实时监控面板，展示龙虾集群状态、任务 DAG、执行结果。
+
+```bash
+# 启动（自动连接 MonitorService）
+python dashboard/dashboard.py --port 5000
+
+# 打开浏览器
+# http://localhost:5000
+```
+
+**功能**：
+- 🐠 节点状态面板（在线/离线/心跳）
+- 📊 统计面板（节点数/在线数/待执行/已完成）
+- ➕ 自然语言提交任务（直接触发执行）
+- 🔀 任务 DAG 可视化（pending → running → success/failed）
+- 📡 实时事件流（WebSocket 推送）
+- 💬 任务列表 + 实时状态更新
+
+**REST API**：
+- `GET /api/status` — 集群整体状态
+- `GET /api/nodes` — 节点列表
+- `GET /api/tasks` — 任务历史
+- `POST /api/tasks` — 提交新任务
+- `WS /ws` — 实时 WebSocket 事件流
+
+---
+
+## 🤖 MCP Server
+
+让其他 Agent 通过 MCP (Model Context Protocol) 调用 ClawSwarm。
+
+```bash
+# 直接运行 MCP 服务器（stdio 模式）
+python mcp_server.py
+
+# 通过 mcporter 调用
+mcporter call --stdio -- python mcp_server.py clawswarm_spawn '{"prompt":"Hello"}'
+```
+
+**MCP Tools**：
+
+| Tool | 作用 |
+|------|------|
+| `clawswarm_spawn` | 启动子龙虾执行任务 |
+| `clawswarm_poll` | 轮询等待结果文件 |
+| `clawswarm_submit` | 提交任务到队列 |
+| `clawswarm_status` | 获取集群整体状态 |
+| `clawswarm_nodes` | 列出所有节点 |
+| `clawswarm_aggregate` | 聚合多个结果文件 |
+
+**跨 Agent 调用**：
+
+Claude Code、Cursor、CodeBuddy 等 Agent 可通过 MCP 协议直接调用：
+
+```bash
+# 已注册到 mcporter
+mcporter call clawswarm.clawswarm_submit prompt="test"
+```
+
+---
+
+## 📚 Examples
+
+```bash
+python examples/01_quickstart.py   # 快速上手：提交 + 轮询
+python examples/02_parallel.py     # 并行任务：多任务 + 聚合
+python examples/04_mcp_demo.py     # MCP 协议调用示例
 ```
 
 ---

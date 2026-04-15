@@ -1,96 +1,92 @@
 # 关于 ClawSwarm
 
-> 🦞 *像龙虾群一样协调多个 AI Agent*
+> 🦞 *一只龙虾指挥另一只龙虾*
 
 [English](ABOUT.md) | [中文](ABOUT_CN.md)
 
 ---
 
-## What Is ClawSwarm?
+## 一句话定位
 
-ClawSwarm is an **OpenClaw-native multi-agent orchestration platform** that lets you describe a complex task in plain language and have it automatically decomposed, distributed, executed, and aggregated by a swarm of specialized AI agents.
+**ClawSwarm = 龙虾指挥龙虾**
 
-你这样写：
-
-```
-"帮我调研 AI Agent 领域的最新进展，搜索技术趋势，分析主流产品，最后生成一份报告"
-```
-
-ClawSwarm 自动这样执行：
-
-```
-task_001 [fetch]   → claw_alpha (search+analyze)
-task_002 [fetch]   → claw_beta  (search+write)
-                      ↓ (both done)
-task_003 [report]  → claw_gamma (report)
-                      ↓
-              📋 Final Aggregated Report
-```
-
-****无需 Python 代码。** JSON 文件或自然语言——就's it.
+一只龙虾 = 一个完整的 AI Agent（Brain + Memory + Tools）
+多只龙虾协同 = 跨设备、跨平台、跨机器的分布式 Agent 编排平台
 
 ---
 
-## 缘起
+## 核心洞察
 
-现有多 Agent 框架与实际生产环境存在根本性的不匹配： have a fundamental mismatch with how AI agents actually work in production:
+### 为什么 ClawSwarm 押注在正确的地方
 
-| Problem | crewAI / AutoGen | ClawSwarm |
-|---------|-----------------|-----------|
-| Deploy on a new machine | Rewrite Python, install deps | Copy one folder |
-| Run without internet | External services required | ✅ File queue, offline OK |
-| Coordinate across 3 computers | ❌ | ✅ Shared folder, zero config |
-| Monitor real-time progress | Web UI only | WebSocket + CLI + Web UI |
-| Human approval on critical steps | ❌ | ✅ Built-in HITL |
-| See what every agent is doing | ❌ | ✅ OpenTelemetry tracing |
-| Docker one-command deploy | ❌ | ✅ `docker compose up` |
+2026年4月，Anthropic 发布 Claude Managed Agents，技术博客反复强调一个词：**Agent Harness**。
 
-ClawSwarm 从设计之初就坚持： **zero-infrastructure**, **cross-machine**, and **deeply integrated with OpenClaw**.
+核心观点：
+
+> 每个 Agent 请求都应该在独立的沙箱环境里运行。
+
+顺着这条思路深挖，Anthropic 把 Agent 运行时拆成三层：
+
+| 层 | 职责 | ClawSwarm 对应 |
+|---|---|---|
+| **Brain** | 推理 + prompt 循环 + tool_call 决策 | Agent 的 LLM + 指令理解 |
+| **Hands** | 沙箱 + 工具（Bash/文件/Web/MCP） | Agent 的执行能力 |
+| **Session** | 事件日志 + SSE 流 + 断连恢复 | Agent 的记忆 + 状态 |
+
+这正是 ClawSwarm 的核心抽象：
+
+> **一只龙虾 = Brain + Hands + Session = 一个完整 Agent**
+
+Anthropic 在卖"官方托管版"，ClawSwarm 在做"去中心化版"。
 
 ---
 
-## 系统架构
+## ClawSwarm 架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    你的对话                     │
-│              "帮我调研 X 并写报告"                        │
-└──────────────────────┬──────────────────────────────────┘
-                       │ cli.py / Web UI / API
-                       ▼
-┌──────────────────────────────────────────────────────────┐
-│              ClawSwarm 编排器                       │
-│                                                          │
-│  ┌──────────────┐  ┌─────────────┐  ┌───────────────┐  │
-│  │  Task        │  │  DAG        │  │  Result       │  │
-│  │  Decomposer  │→ │  Scheduler  │→ │  Aggregator   │  │
-│  │  (LLM/rule) │  │  (capability)│  │  (LLM/template)│ │
-│  └──────────────┘  └─────────────┘  └───────────────┘  │
-│                                                          │
-│  ┌──────────────┐  ┌─────────────┐  ┌───────────────┐  │
-│  │ HITL         │  │ Observ-     │  │ Events        │  │
-│  │ Checkpoints  │  │ ability     │  │ (WebSocket)   │  │
-│  └──────────────┘  └─────────────┘  └───────────────┘  │
-└──────────────────────┬──────────────────────────────────┘
-                       │ File Queue / REST API
-         ┌─────────────┼─────────────┐
-         ▼             ▼             ▼
-┌─────────────────┐ ┌──────────┐ ┌──────────────┐
-│  claw_alpha     │ │ claw_beta│ │ claw_gamma   │
-│  search+write   │ │ read+    │ │ search+      │
-│  +code          │ │ write    │ │ analyze+     │
-│                 │ │          │ │ report       │
-│  executor.py    │ │ executor │ │ executor     │
-│  sessions_      │ │ .py      │ │ .py          │
-│  spawn          │ │          │ │              │
-└─────────────────┘ └──────────┘ └──────────────┘
-         │             │             │
-         └─────────────┴─────────────┘
-                       │ results/
-                       ▼
-              ┌─────────────────┐
-              │ Final Report    │
-              └─────────────────┘
+用户（自然语言任务）
+    │
+    ▼
+Orchestrator（LLM 分解）
+    │
+    ├──→ Queue（文件队列，跨设备共享）
+    │
+    ▼
+龙虾 Alpha（Brain + Hands + Session）
+    │
+    ├──→ Queue（子任务）
+    │
+    ▼
+龙虾 Beta / Gamma / ...（并行执行）
+    │
+    ▼
+结果聚合（aggregate）
+    │
+    ▼
+最终输出
+```
+
+---
+
+## 龙虾模型：每个 Agent 的三层结构
+
+```
+┌──────────────────────────────────┐
+│  🧠 Brain（LLM）                │
+│  - 指令理解 + 推理               │
+│  - 子任务分解                    │
+│  - 决策                          │
+├──────────────────────────────────┤
+│  🦷 Hands（执行层）              │
+│  - Bash / 文件 / Web Fetch       │
+│  - MCP servers（扩展工具）        │
+│  - HITL 审批（人类介入）         │
+├──────────────────────────────────┤
+│  📦 Session（状态层）            │
+│  - 记忆 + 上下文持久化           │
+│  - 工作目录隔离                  │
+│  - 凭证隔离                      │
+└──────────────────────────────────┘
 ```
 
 ---
@@ -99,7 +95,7 @@ ClawSwarm 从设计之初就坚持： **zero-infrastructure**, **cross-machine**
 
 ### Agent 角色
 
-Agent 具备专业化能力，作为轻量级进程运行： and run as lightweight processes:
+Agent 具备专业化能力，作为轻量级进程运行：
 
 ```
 claw_alpha  →  researcher  (search + analyze)

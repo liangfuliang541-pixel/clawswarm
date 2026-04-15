@@ -37,6 +37,43 @@ cd clawswarm
 ./deploy.sh stop
 ```
 
+### 方式三：Dashboard（Web UI 监控）
+
+```bash
+# 启动 Dashboard（自动连接 MonitorService）
+python dashboard/dashboard.py --port 5000
+
+# 浏览器打开
+# http://localhost:5000
+```
+
+Dashboard 功能：节点状态、任务 DAG 可视化、实时事件流、自然语言任务提交。
+
+### 方式四：MCP Server（Agent 间调用）
+
+```bash
+# 直接启动 MCP 服务器（stdio 模式）
+python mcp_server.py
+
+# 或注册到 mcporter 后使用
+mcporter call clawswarm.clawswarm_status
+mcporter call clawswarm.clawswarm_submit prompt="task description" priority=8
+```
+
+注册配置（一次性）：
+```json
+// ~/.mcporter/mcporter.json
+{
+  "mcpServers": {
+    "clawswarm": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "/path/to/clawswarm"
+    }
+  }
+}
+```
+
 ### 方式二：Docker Compose（推荐生产部署）
 
 ```bash

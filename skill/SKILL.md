@@ -1,147 +1,156 @@
 ---
 name: clawswarm
-description: ClawSwarm — 一只龙虾指挥另一只龙虾。跨设备、跨平台的多 Agent 编排。当用户描述需要多 AI Agent 协同完成复杂任务时触发（如"多 agent"、"spawn"、"orchestrate"、"龙虾"、"swarm"、"multi-agent"）。
-metadata: { "openclaw": { "emoji": "🦞" } }
+description: "ClawSwarm \u2014 \u4e00\u53ea\u9f99\u867e\u6307\u6325\u53e6\u4e00\u53ea\u9f99\u867e\u3002\u8de8\u8bbe\u5907\u3001\u8de8\u5e73\u53f0\u7684\u591a Agent \u7f16\u6392\u3002\u89e6\u53d1\u8bcd\uff1a\u591a agent\u3001spawn\u3001orchestrate\u3001\u9f99\u867e\u3001swarm\u3001multi-agent\u3001mcp"
+metadata: { "openclaw": { "emoji": "\U0001f99e" } }
 ---
 
-# ClawSwarm — 一只龙虾指挥另一只龙虾
+# ClawSwarm \u2014 \u4e00\u53ea\u9f99\u867e\u6307\u6325\u53e6\u4e00\u53ea\u9f99\u867e
 
-## 核心定位
+## \u6838\u5fc3\u5b9a\u4f4d
 
-🦞 **一只龙虾 = 一个完整 Agent**（Brain + Hands + Session）
+\U0001f99e **\u4e00\u53ea\u9f99\u867e = \u4e00\u4e2a\u5b8c\u6574 Agent**\uff08Brain + Hands + Session\uff09
 
-🐉 **ClawSwarm = 龙虾指挥龙虾**（跨设备、跨平台分布式编排）
-
----
-
-## 什么时候用
-
-当用户说：
-- "多 agent 协同完成" / "spawn agents" / "orchestrate"
-- "让多个 AI 同时处理" / "龙虾" / "swarm"
-- 复杂任务需要分解（"研究 X，分析 Y，写报告 Z"）
-
-**不要用**：单 Agent 能直接搞定的任务。
+\U0001f409 **ClawSwarm = \u9f99\u867e\u6307\u6325\u9f99\u867e**\uff08\u8de8\u8bbe\u5907\u3001\u8de8\u5e73\u53f0\u5206\u5e03\u5f0f\u7f16\u6392\uff09
 
 ---
 
-## 架构（龙虾指挥龙虾）
+## \u4f55\u65f6\u89e6\u53d1
+
+\u7528\u6237\u63cf\u8ff0\u9700\u8981\u591a AI Agent \u534f\u540c\u5b8c\u6210\u590d\u6742\u4efb\u52a1\uff1a
+- "\u591a agent \u534f\u540c" / "spawn agents" / "orchestrate" / "\u9f99\u867e" / "swarm"
+- \u590d\u6742\u4efb\u52a1\u9700\u8981\u5206\u89e3\uff08"\u7814\u7a76 X\uff0c\u5206\u6790 Y\uff0c\u5199\u62a5\u544a Z"\uff09
+
+**\u4e0d\u8981\u7528**\uff1a\u5355 Agent \u80fd\u76f4\u63a5\u641e\u5b9a\u7684\u4efb\u52a1\u3002
+
+---
+
+## \u67b6\u6784\uff08\u9f99\u867e\u6307\u6325\u9f99\u867e\uff09
 
 ```
-用户（自然语言）
-    │
-    ▼
-我（Orchestrator = 主龙虾 🦞）
-    │
-    ├── sessions_spawn ──→ 子龙虾 Alpha（research）
-    │                      ↓ 写入 results/spawn_*.json
-    ├── sessions_spawn ──→ 子龙虾 Beta（write）
-    │                      ↓ 写入 results/spawn_*.json
-    ├── sessions_spawn ──→ 子龙虾 Gamma（code）
-    │                      ↓ 写入 results/spawn_*.json
-    │
-    ├── poll.py ────────→ 等待结果文件
-    │
-    └── aggregate.py ────→ 聚合 → 最终输出
+\u7528\u6237\uff08\u81ea\u7136\u8bed\u8a00\uff09
+    \u2502
+    \u25bc
+\u6211\uff08Orchestrator = \u4e3b\u9f99\u867e \U0001f99e\uff09
+    \u2502
+    \u251c\u2500\u2500 sessions_spawn \u2500\u2500\u2192 \u5b50\u9f99\u867e Alpha\uff08research\uff09
+    \u2502                      \u2193 \u5199\u5165 results/spawn_*.json
+    \u251c\u2500\u2500 sessions_spawn \u2500\u2500\u2192 \u5b50\u9f99\u867e Beta\uff08write\uff09
+    \u2502                      \u2193 \u5199\u5165 results/spawn_*.json
+    \u251c\u2500\u2500 sessions_spawn \u2500\u2500\u2192 \u5b50\u9f99\u867e Gamma\uff08code\uff09
+    \u2502                      \u2193 \u5199\u5165 results/spawn_*.json
+    \u2502
+    \u251c\u2500\u2500 mcporter clawswarm \u2500\u2192 \u63d0\u4ea4/\u8f6e\u8be2/\u805a\u5408\uff08MCP \u534f\u8bae\uff09
+    \u2502
+    \u2514\u2500\u2500 aggregate.py \u2500\u2500\u2500\u2192 \u805a\u5408 \u2192 \u6700\u7ec8\u8f93\u51fa
 ```
 
 ---
 
-## 编排流程
+## \u7f16\u6392\u65b9\u5f0f\uff08\u4e24\u79cd\uff0c\u6309\u9700\u9009\u62e9\uff09
 
-### Step 1 — 分解任务
+### \u65b9\u5f0f A\uff1asessions_spawn\uff08\u539f\u751f\u591a Agent\uff09
 
-把复杂任务拆成 2-5 个可并行的子任务。每个子任务：
-- 有明确边界
-- 可独立执行
-- 结果可聚合
+\u5f53\u4efb\u52a1\u9700\u8981\u5b8c\u6574\u7684 AI \u63a8\u7406\u80fd\u529b\u65f6\u4f7f\u7528\u3002
 
-### Step 2 — 并行 Spawn
+**Step 1** \u2014 \u5206\u89e3\u4efb\u52a1\u4e3a 2-5 \u4e2a\u53ef\u5e76\u884c\u5b50\u4efb\u52a1
 
-同时调用 `sessions_spawn` 启动多个子龙虾：
-
+**Step 2** \u2014 \u5e76\u884c Spawn
 ```
 sessions_spawn(
-    message="TASK: [完整任务描述]
-结果文件: [results/spawn_标签_时间戳.json]
-请执行完成后将结果写入该文件。",
+    message="TASK: [\u5b8c\u6574\u4efb\u52a1\u63cf\u8ff0]
+\u7ed3\u679c\u6587\u4ef6: [results/spawn_\u6807\u7b7e_\u65f6\u95f4\u6233.json]
+\u8bf7\u6267\u884c\u5b8c\u6210\u540e\u5c06\u7ed3\u679c\u5199\u5165\u8be5\u6587\u4ef6\u3002",
     agent_id="main",
     timeout=120
 )
 ```
 
-### Step 3 — 等待结果
-
+**Step 3** \u2014 \u7b49\u5f85\u7ed3\u679c
 ```bash
 python scripts/poll.py --label research --timeout 120
-python scripts/poll.py --label write --timeout 120
 ```
 
-### Step 4 — 聚合输出
-
+**Step 4** \u2014 \u805a\u5408\u8f93\u51fa
 ```bash
 python scripts/aggregate.py --labels research,write --output final.json
 ```
 
+### \u65b9\u5f0f B\uff1aMCP Server\uff08\u8f7b\u91cf\u961f\u5217\uff09
+
+\u5f53\u4efb\u52a1\u662f\u7b80\u5355\u7684\u961f\u5217\u64cd\u4f5c\uff08\u63d0\u4ea4/\u67e5\u8be2/\u805a\u5408\uff09\u65f6\u4f7f\u7528\u3002
+
+**\u63d0\u4ea4\u4efb\u52a1**\uff1a
+```bash
+mcporter call clawswarm.clawswarm_submit prompt="\u4efb\u52a1\u63cf\u8ff0" priority=8
+```
+
+**\u67e5\u8be2\u96c6\u7fa4\u72b6\u6001**\uff1a
+```bash
+mcporter call clawswarm.clawswarm_status
+```
+
+**\u5217\u51fa\u8282\u70b9**\uff1a
+```bash
+mcporter call clawswarm.clawswarm_nodes
+```
+
+**\u805a\u5408\u591a\u4e2a\u7ed3\u679c**\uff1a
+```bash
+mcporter call clawswarm.clawswarm_aggregate --args '{"labels":["research","write"]}'
+```
+
+**\u542f\u52a8\u5b50\u9f99\u867e**\uff08\u5199\u5165\u961f\u5217\u6587\u4ef6\uff09\uff1a
+```bash
+mcporter call clawswarm.clawswarm_spawn prompt="\u641c\u7d22 AI \u6700\u65b0\u8fdb\u5c55" label="news" timeout=120
+```
+
+### \u65b9\u5f0f\u9009\u62e9\u6307\u5357
+
+| \u573a\u666f | \u63a8\u8350\u65b9\u5f0f | \u539f\u56e0 |
+|------|---------|------|
+| \u9700\u8981 AI \u63a8\u7406/\u5199\u4f5c/\u5206\u6790 | **A: sessions_spawn** | \u5b50\u9f99\u867e\u6709\u5b8c\u6574 LLM \u80fd\u529b |
+| \u7b80\u5355\u961f\u5217\u64cd\u4f5c/\u67e5\u8be2\u72b6\u6001 | **B: MCP Server** | \u8f7b\u91cf\u3001\u5feb\u901f\u3001\u65e0\u9700\u542f\u52a8\u5b50\u4f1a\u8bdd |
+| \u805a\u5408\u5df2\u6709\u7ed3\u679c | **B: MCP aggregate** | \u4e00\u6b21\u8c03\u7528\u5408\u5e76\u591a\u4e2a\u7ed3\u679c |
+| \u590d\u6742\u4efb\u52a1\u5206\u89e3+\u5e76\u884c\u6267\u884c | **A+B \u7ec4\u5408** | \u7528 spawn \u5206\u89e3\uff0c\u7528 MCP \u8f6e\u8be2\u7ed3\u679c |
+
 ---
 
-## 脚本说明
+## MCP Tools \u53c2\u8003
 
-| 脚本 | 作用 |
+| Tool | \u4f5c\u7528 | \u53c2\u6570 |
+|------|------|------|
+| `clawswarm_spawn` | \u542f\u52a8\u5b50\u9f99\u867e\uff0c\u5199\u5165\u961f\u5217 | prompt, label?, timeout?, priority? |
+| `clawswarm_poll` | \u8f6e\u8be2\u7b49\u5f85\u7ed3\u679c | label, timeout? |
+| `clawswarm_submit` | \u63d0\u4ea4\u4efb\u52a1\u5230\u961f\u5217 | prompt, mode?, priority? |
+| `clawswarm_status` | \u96c6\u7fa4\u6574\u4f53\u72b6\u6001 | \u65e0 |
+| `clawswarm_nodes` | \u8282\u70b9\u5217\u8868 | \u65e0 |
+| `clawswarm_aggregate` | \u805a\u5408\u591a\u4e2a\u7ed3\u679c | labels[] |
+
+---
+
+## \u811a\u672c\u8bf4\u660e
+
+| \u811a\u672c | \u4f5c\u7528 |
 |------|------|
-| `scripts/spawn.py` | 写任务到队列，返回 task/result 路径 |
-| `scripts/poll.py` | 轮询等待结果文件 |
-| `scripts/aggregate.py` | 合并多个结果文件 |
+| `scripts/spawn.py` | \u5199\u4efb\u52a1\u5230\u961f\u5217\uff0c\u8fd4\u56de task/result \u8def\u5f84 |
+| `scripts/poll.py` | \u8f6e\u8be2\u7b49\u5f85\u7ed3\u679c\u6587\u4ef6 |
+| `scripts/aggregate.py` | \u5408\u5e76\u591a\u4e2a\u7ed3\u679c\u6587\u4ef6 |
 
 ---
 
-## 案例
+## \u8bbe\u8ba1\u539f\u5219
 
-**用户**："调研 AI Agent 最新进展，分析趋势，写一份报告"
-
-**分解**：
-- Agent A（research_tech）：搜索最新技术进展
-- Agent B（research_prod）：搜索主流产品动态
-- Agent C（analysis）：分析趋势（依赖 A+B）
-- Agent D（report）：撰写报告（依赖 C）
-
-**执行**：
-```
-sessions_spawn(A) + sessions_spawn(B)  → 并行
-poll.py 等待 A+B 完成
-sessions_spawn(C)                      → 顺序
-sessions_spawn(D)                      → 顺序
-aggregate.py → final.json
-```
+1. **\u5148\u5206\u89e3** \u2014 \u590d\u6742\u4efb\u52a1\u5fc5\u987b\u5148\u62c6\u89e3
+2. **\u80fd\u5e76\u884c\u5c31\u5e76\u884c** \u2014 \u72ec\u7acb\u4efb\u52a1\u540c\u65f6\u6267\u884c
+3. **\u6587\u4ef6\u901a\u4fe1** \u2014 Agent \u95f4\u901a\u8fc7 JSON \u6587\u4ef6\u4f20\u9012\u7ed3\u679c
+4. **\u8d85\u65f6\u63a7\u5236** \u2014 \u6bcf\u4e2a spawn \u90fd\u8bbe timeout
+5. **\u805a\u5408\u4e3a\u7ec8** \u2014 \u6700\u7ec8\u7b54\u6848\u6765\u81ea\u6240\u6709\u5b50 Agent \u8f93\u51fa\u7684\u805a\u5408
 
 ---
 
-## 设计原则
+## \u6545\u969c\u6392\u67e5
 
-1. **先分解**：复杂任务必须先拆解，不能直接 spawn
-2. **能并行就并行**：独立任务同时执行
-3. **文件通信**：Agent 间通过 JSON 文件传递结果
-4. **超时控制**：每个 spawn 都设 timeout，避免挂起
-5. **聚合为终**：最终答案来自所有子 Agent 输出的聚合
-
----
-
-## 故障排查
-
-- **Agent 挂起**：检查 timeout，检查结果文件是否写入
-- **无输出**：检查 results/ 目录
-- **权限错误**：确保目录存在且可写
-
----
-
-## 研究参考
-
-2026年4月调研结论：
-
-| 发现 | 来源 | 对 ClawSwarm 的意义 |
-|------|------|---------------------|
-| Anthropic Managed Agents = Brain/Hands/Session 三层 | Anthropic 官方博客 | 验证"龙虾"抽象是正确的 |
-| Agent Harness = 独立沙箱运行 | Anthropic Engineering | ClawSwarm 每个龙虾独立 workspace 正是此架构 |
-| 2026 多 Agent 分叉四条路线 | CSDN 技术分析 | OpenClaw = 运行时编排，ClawSwarm = 编排的编排 |
-| MCP 协议 = 工具扩展标准 | Anthropic/Google | 未来让龙虾间互相调用工具 |
-| A2A 协议 = Agent 间通信 | Google | 未来龙虾间直接通信协商 |
+- **Agent \u6302\u8d77**\uff1a\u68c0\u67e5 timeout\uff0c\u68c0\u67e5\u7ed3\u679c\u6587\u4ef6\u662f\u5426\u5199\u5165
+- **mcporter \u8c03\u7528\u5931\u8d25**\uff1a\u8fd0\u884c `mcporter list clawswarm --schema` \u68c0\u67e5
+- **\u65e0\u8f93\u51fa**\uff1a\u68c0\u67e5 `swarm_data/results/` \u76ee\u5f55
+- **Dashboard \u8fde\u63a5\u5931\u8d25**\uff1a\u786e\u8ba4 `python dashboard/dashboard.py` \u5df2\u542f\u52a8
