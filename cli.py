@@ -12,12 +12,6 @@ ClawSwarm 命令行工具
 import os, sys, json, argparse, subprocess, threading, time
 from datetime import datetime
 
-# Windows 控制台 UTF-8
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
 from paths import BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR, AGENTS_DIR
 
 
@@ -56,7 +50,7 @@ def cmd_add_task(args):
     task = {
         "id":          f"t_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
         "type":        args.type or "general",
-        "description": args.task,
+        "description": args.description or args.task,
         "prompt":     args.prompt or args.task,
         "mode":       args.mode or "spawn",
         "priority":   args.priority or 1,
@@ -103,8 +97,32 @@ def cmd_start_node(args):
     node_id = args.node_id
     print(f"启动节点: {node_id}")
     node_script = os.path.join(BASE_DIR, "swarm_node.py")
+
+    # 从角色获取默认能力
+    caps = list(args.capabilities)
+    if not caps:
+        # 默认用 all 能力
+        caps = ["search", "write", "code", "read", "analyze", "report"]
+        print(f"  无指定能力，使用默认: {caps}")
+    else:
+        # 映射角色名到能力
+        role_map = {
+            "researcher": ["search", "analyze"],
+            "writer":     ["write"],
+            "coder":      ["code", "write"],
+            "analyzer":   ["analyze"],
+            "reviewer":   ["read"],
+            "planner":    ["search"],
+            "all":        ["search", "write", "code", "read", "analyze", "report"],
+        }
+        # 如果指定了角色，展开为能力列表
+        expanded = []
+        for cap in caps:
+            expanded.extend(role_map.get(cap, [cap]))
+        caps = list(dict.fromkeys(expanded))  # 去重保持顺序
+
     proc = subprocess.Popen(
-        [sys.executable, node_script, node_id] + args.capabilities,
+        [sys.executable, node_script, node_id] + caps,
         cwd=BASE_DIR,
         creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0
     )

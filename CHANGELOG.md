@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-04-15
+
+### Added
+- **
+oles.py** (NEW): Agent 角色系统
+  - 6 个预定义角色：Researcher / Writer / Coder / Analyzer / Reviewer / Planner
+  - RoleRegistry 全局注册表：register / create_agent / load_from_file
+  - AgentProfile：角色实例（role/goal/backstory/tools/memory）
+  - system_prompt()：自动生成 LLM system prompt
+  - preset teams: create_research_team() / create_dev_team()
+
+- **llm.py** (NEW): LLM 抽象层
+  - 4 个 Provider：OpenAI / Anthropic / Gemini / Ollama
+  - 统一接口：LLMProvider / Message / ChatResponse
+  - chat() 快捷函数：单次对话
+  - 5 个预置工具定义：web_search / web_fetch / code_execute / file_read / file_write
+  - 工厂函数 create_llm_client() 自动选择 Provider
+
+- **memory.py** (NEW): Agent 记忆系统
+  - ShortTermMemory：ring buffer 对话历史，自动摘要压缩
+  - LongTermMemory：持久化 JSONL，BM25 关键词搜索，跨会话
+  - WorkingMemory：TaskContext 管理当前任务状态和中间产物
+  - MemoryStore：统一接口，short + long + working 三层记忆
+
+- **Orchestrator LLM 驱动**：TaskDecomposer LLM 智能分解 + ResultAggregator LLM 聚合
+
+### Changed
+- orchestrator.py：重构，LLM 智能分解（降级到规则引擎 fallback）
+- orchestrator.py：改进 ResultAggregator，优先 LLM 合成报告
+- classify_task()：加权评分（词频 + 关键词长度）
+
+### Testing
+- 新增 test_v040.py：27 个测试，覆盖 roles / llm / memory / orchestrator
+- 全量测试 49/49 通过
+
+---
+
+---
+
 ## [0.3.0] - 2026-04-15
 
 ### Added

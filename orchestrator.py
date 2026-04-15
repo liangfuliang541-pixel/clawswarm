@@ -3,33 +3,26 @@ ClawSwarm Orchestrator - 任务编排器
 
 负责：
 1. 接收高层任务描述
-2. 智能分解为子任务（规则引擎）
-3. 构建 DAG 依赖图
-4. 并行调度 + 串行协调
-5. 实时收集结果
-6. 聚合输出
+2. LLM 智能分解为子任务 DAG
+3. 并行调度 + 串行协调
+4. 实时收集结果
+5. LLM 聚合输出
 
 核心流程：
   用户: "搜索 Python 最新资讯并写一份报告"
          ↓
-  Orchestrator.decompose()  → 拆成 [fetch, report] 两个子任务
+  Orchestrator.decompose()  → LLM 拆成 [fetch, report] 两个子任务
          ↓
   Scheduler.create_task()    → 写入 queue/，自动匹配节点
          ↓
   节点并行执行
          ↓
-  Aggregator.aggregate()      → 收集结果，合成最终输出
+  Aggregator.aggregate()      → LLM 合成最终报告
          ↓
   用户: 收到结构化结果
 """
 
-import os
-import re
-import time
-import json
-import uuid
-import asyncio
-import threading
+import os, re, time, json, uuid, asyncio, threading
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -38,11 +31,12 @@ from collections import defaultdict
 from paths import QUEUE_DIR, RESULTS_DIR, AGENTS_DIR, ensure_dirs, can_node_handle, find_best_node
 from swarm_scheduler import create_task, get_online_nodes
 
+# LLM 支持（可选，无 API Key 时降级到规则引擎）
 try:
-    from watchdog.observers import Observer
-    HAS_WATCHDOG = True
+    from llm import chat, Message, create_llm_client
+    HAS_LLM = True
 except ImportError:
-    HAS_WATCHDOG = False
+    HAS_LLM = False
 
 
 # ── 任务分类器 ─────────────────────────────────────────────────────────────
@@ -55,18 +49,20 @@ TASK_KEYWORDS: Dict[str, List[str]] = {
     "read":    ["读", "读取", "打开", "查看", "检查", "read", "open", "view", "check"],
 }
 
-# 连接词：分割子任务的边界
 SPLITTERS = re.compile(r'[，,；;]|然后|接着|之后|并|同时|另外|以及|还有')
 
 
+
 def classify_task(text: str) -> str:
-    """根据关键词对任务描述进行分类"""
-    scores: Dict[str, int] = defaultdict(int)
+    scores: Dict[tuple] = {}
     for task_type, keywords in TASK_KEYWORDS.items():
         for kw in keywords:
             if re.search(re.escape(kw), text, re.IGNORECASE):
-                scores[task_type] += 1
-    return max(scores, key=scores.get) if scores else "general"
+                prev = scores.get(task_type, (0, 0))
+                scores[task_type] = (prev[0] + 1, max(prev[1], len(kw)))
+    if not scores:
+        return "general"
+    return max(scores, key=lambda t: (scores[t][0], scores[t][1]))
 
 
 # ── 子任务模型 ─────────────────────────────────────────────────────────────
@@ -87,21 +83,87 @@ class SubTask:
 class TaskDecomposer:
     """
     将高层自然语言任务拆解为子任务 DAG。
-    
-    分解策略：
-    - 先按连接词拆分
-    - 无法拆分 → 单一任务
-    - 多个子任务 → 按类型自动注入依赖
-      (report/analyze 依赖前面的 fetch)
+    支持 LLM 智能分解 + 规则引擎 fallback。
     """
 
+    DECOMPOSE_PROMPT = """你是一个任务规划专家。用户会给一个高层任务，你需要将其分解为可执行的子任务。
+
+要求：
+1. 每个子任务必须是独立可执行的
+2. 明确子任务之间的依赖关系（report/analyze 依赖前面的 research）
+3. 标注每个子任务的类型（fetch/analyze/report/code/read/general）
+4. 尽量并行化：没有依赖关系的子任务应并行执行
+5. 子任务数量控制在 1-5 个
+
+输出格式（JSON array）：
+[
+  {
+    "id": "step_1",
+    "type": "fetch",
+    "description": "搜索相关信息",
+    "depends_on": []
+  },
+  {
+    "id": "step_2", 
+    "type": "report",
+    "description": "撰写报告",
+    "depends_on": ["step_1"]
+  }
+]
+
+用户任务：{task}
+
+请直接输出 JSON，不要有其他文字。"""
+
+    def __init__(self, use_llm: bool = True):
+        self.use_llm = use_llm and HAS_LLM
+
     def decompose(self, description: str) -> List[SubTask]:
-        """分解高层描述，返回子任务列表（无依赖顺序）"""
-        # 按连接词分割
+        """分解高层描述，返回子任务列表"""
+        if self.use_llm:
+            try:
+                return self._decompose_llm(description)
+            except Exception:
+                pass  # LLM 失败，降级到规则
+        return self._decompose_rule(description)
+
+    def _decompose_llm(self, description: str) -> List[SubTask]:
+        """使用 LLM 分解任务"""
+        prompt = self.DECOMPOSE_PROMPT.format(task=description)
+        resp = chat(
+            messages=[Message("user", prompt)],
+            model="gpt-4o-mini",
+            temperature=0.3,
+            max_tokens=2048,
+        )
+
+        if resp.error:
+            raise RuntimeError(f"LLM decompose failed: {resp.error}")
+
+        # 解析 JSON
+        content = resp.content.strip()
+        # 去掉 markdown 代码块
+        if content.startswith("```"):
+            content = re.sub(r'^```json?\s*', '', content)
+            content = re.sub(r'\s*```$', '', content)
+
+        data = json.loads(content)
+        sub_tasks = []
+        for item in data:
+            st = SubTask(
+                id=item.get("id", "sub"),
+                type=item.get("type", "general"),
+                description=item.get("description", ""),
+                depends_on=item.get("depends_on", []),
+            )
+            sub_tasks.append(st)
+        return sub_tasks
+
+    def _decompose_rule(self, description: str) -> List[SubTask]:
+        """规则引擎分解（fallback）"""
         segments = [s.strip() for s in SPLITTERS.split(description) if s.strip()]
 
         if len(segments) == 1:
-            # 单一任务
             return [SubTask(
                 id="sub_0",
                 type=classify_task(description),
@@ -121,7 +183,8 @@ class TaskDecomposer:
             if st.type in ("report", "analyze"):
                 for j in range(i):
                     if sub_tasks[j].type == "fetch":
-                        st.depends_on.append(sub_tasks[j].id)
+                        if sub_tasks[j].id not in st.depends_on:
+                            st.depends_on.append(sub_tasks[j].id)
 
         return sub_tasks
 
@@ -131,8 +194,22 @@ class TaskDecomposer:
 class ResultAggregator:
     """
     收集子任务结果，聚合为最终输出。
-    支持并行收集 + 智能格式化。
+    支持 LLM 智能聚合 + 模板 fallback。
     """
+
+    AGGREGATE_PROMPT = """你是任务总结专家。以下是多个子任务的执行结果，请将它们聚合成一个完整、结构化的最终报告。
+
+要求：
+1. 保留关键信息，去除冗余
+2. 按逻辑顺序组织（不要简单拼接）
+3. 对比分析时要有洞察
+4. 写作用词专业、结构清晰
+5. 控制在 2000 字以内
+
+子任务结果：
+{results}
+
+请直接输出最终报告，不需要解释。"""
 
     SECTION_EMOJI = {
         "fetch":   "📡",
@@ -143,19 +220,36 @@ class ResultAggregator:
         "general": "📦",
     }
 
+    def __init__(self, use_llm: bool = True):
+        self.use_llm = use_llm and HAS_LLM
+
     def aggregate(self, sub_tasks: List[SubTask]) -> str:
         """将所有子任务结果聚合成最终报告"""
+        # 格式化子任务结果
+        results_text = self._format_results(sub_tasks)
+
+        if self.use_llm and len(sub_tasks) > 1:
+            try:
+                return self._aggregate_llm(results_text)
+            except Exception:
+                pass  # LLM 失败，降级到模板
+
+        return self._aggregate_template(sub_tasks)
+
+    def _format_results(self, sub_tasks: List[SubTask]) -> str:
         parts = []
         for st in sub_tasks:
             emoji = self.SECTION_EMOJI.get(st.type, "📦")
-            parts.append(f"\n{emoji} **{st.description[:60]}**\n")
-            parts.append(self._format_result(st))
-        return "\n".join(parts) if parts else "（无结果）"
+            parts.append(f"【{st.id}】{st.description}")
+            parts.append(f"  状态: {st.status}")
+            parts.append(f"  结果: {self._extract_content(st)}")
+            parts.append("")
+        return "\n".join(parts)
 
-    def _format_result(self, st: SubTask) -> str:
-        """提取并格式化单个子任务的结果"""
+    def _extract_content(self, st: SubTask) -> str:
+        """提取单个子任务的结果内容"""
         if st.status != "done" or st.result is None:
-            return f"   ⏳ {st.status}"
+            return f"（未完成: {st.status}）"
 
         r = st.result
         content = ""
@@ -163,8 +257,7 @@ class ResultAggregator:
         if isinstance(r, str):
             content = r
         elif isinstance(r, dict):
-            # 优先字段：output > result > content > stdout > text
-            for key in ["output", "result", "content", "stdout", "text"]:
+            for key in ["output", "result", "content", "stdout", "text", "content"]:
                 if key in r and r[key]:
                     val = r[key]
                     content = val if isinstance(val, str) else json.dumps(val, ensure_ascii=False)
@@ -174,22 +267,41 @@ class ResultAggregator:
         else:
             content = str(r)
 
-        # 截断
         if len(content) > 3000:
             content = content[:3000] + "\n... _(已截断)_"
         elif not content.strip():
             content = "(空结果)"
+        return content
 
-        return "   " + content.replace("\n", "\n   ")
+    def _aggregate_llm(self, results_text: str) -> str:
+        """使用 LLM 聚合"""
+        prompt = self.AGGREGATE_PROMPT.format(results=results_text)
+        resp = chat(
+            messages=[Message("user", prompt)],
+            model="gpt-4o-mini",
+            temperature=0.5,
+            max_tokens=4096,
+        )
+
+        if resp.error:
+            raise RuntimeError(f"LLM aggregate failed: {resp.error}")
+
+        return resp.content.strip()
+
+    def _aggregate_template(self, sub_tasks: List[SubTask]) -> str:
+        """模板聚合（fallback）"""
+        parts = []
+        for st in sub_tasks:
+            emoji = self.SECTION_EMOJI.get(st.type, "📦")
+            parts.append(f"\n{emoji} **{st.description[:60]}**\n")
+            parts.append("   " + self._extract_content(st).replace("\n", "\n   "))
+        return "\n".join(parts) if parts else "（无结果）"
 
 
 # ── Watchdog 实时结果收集器 ────────────────────────────────────────────────
 
 class ResultWatcher:
-    """
-    使用 watchdog 监听 results/ 目录，新结果文件出现立刻通知。
-    比轮询更实时，比 blocking read 更可控。
-    """
+    """使用 watchdog 监听 results/ 目录，新结果文件出现立刻通知"""
 
     def __init__(self):
         self._results: Dict[str, dict] = {}
@@ -198,11 +310,18 @@ class ResultWatcher:
         self._observer = None
 
     def start(self):
-        if not HAS_WATCHDOG:
-            return
         try:
+            from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
 
+            HAS_WATCHDOG = True
+        except ImportError:
+            HAS_WATCHDOG = False
+
+        if not HAS_WATCHDOG:
+            return
+
+        try:
             class RHandler(FileSystemEventHandler):
                 def __init__(wself, watcher):
                     wself.watcher = watcher
@@ -224,7 +343,7 @@ class ResultWatcher:
             self._observer.daemon = True
             self._observer.start()
         except Exception:
-            pass  # watchdog 不可用，fallback 到轮询
+            pass
 
     def stop(self):
         if self._observer:
@@ -237,14 +356,12 @@ class ResultWatcher:
         pending = set(task_ids)
 
         while pending and time.time() < deadline:
-            # 有 watchdog 时用事件等待，否则轮询
             if self._found.is_set():
                 self._found.clear()
-                # 再次检查 pending
                 still_pending = set()
                 for tid in pending:
                     if tid in self._results:
-                        pass  # 已收集
+                        pass
                     elif os.path.exists(os.path.join(RESULTS_DIR, f"r_{tid}.json")):
                         try:
                             with open(os.path.join(RESULTS_DIR, f"r_{tid}.json"), encoding="utf-8") as f:
@@ -290,34 +407,27 @@ class OrchestratorResult:
 class Orchestrator:
     """
     ClawSwarm 任务编排器
-    
+
     用法:
         orc = Orchestrator(timeout=120)
         result = orc.run("搜索今天深圳天气并写一份简短报告")
         print(result.final_output)
-    
+
     也支持流式输出（通过 on_progress 回调）：
         orc.run("分析这个", on_progress=print)
     """
 
-    def __init__(self, timeout: float = 120.0, poll_interval: float = 0.5):
+    def __init__(self, timeout: float = 120.0, use_llm: bool = True):
         self.timeout = timeout
-        self.poll_interval = poll_interval
-        self.decomposer = TaskDecomposer()
-        self.aggregator = ResultAggregator()
+        self.use_llm = use_llm
+        self.decomposer = TaskDecomposer(use_llm=use_llm)
+        self.aggregator = ResultAggregator(use_llm=use_llm)
 
     # ── 公开 API ─────────────────────────────────────────────────────────
 
     def run(self, description: str, on_progress=None) -> OrchestratorResult:
         """
         端到端执行一个高层任务。
-
-        Args:
-            description: 自然语言任务描述
-            on_progress: 可选回调，每完成一个子任务调用 `callback(sub_task)`
-
-        Returns:
-            OrchestratorResult: 包含所有子任务和最终聚合结果
         """
         ensure_dirs()
         start_time = time.time()
@@ -325,6 +435,10 @@ class Orchestrator:
 
         print(f"\n🦞 ClawSwarm Orchestrator")
         print(f"📋 输入: {description}")
+        if self.use_llm and HAS_LLM:
+            print(f"🤖 LLM 驱动模式")
+        else:
+            print(f"📐 规则引擎模式")
 
         # 1. 分解
         sub_tasks = self.decomposer.decompose(description)
@@ -338,64 +452,58 @@ class Orchestrator:
             result.total_duration = time.time() - start_time
             return result
 
-        # 2. 调度：分层执行（DAG 拓扑序）
-        #    先执行所有无依赖的（并行），再执行有依赖的（等待完成后串行）
+        # 2. 调度：并行执行所有子任务
         scheduled = set()
-        in_flight: Dict[str, asyncio.Future] = {}
+        pending_ids: List[str] = []
 
-        def mark_done(st_id):
-            scheduled.add(st_id)
-            if on_progress and st_id in in_flight:
-                for st in sub_tasks:
-                    if st.id == st_id:
-                        on_progress(st)
-                        break
-
-        # 并行执行无依赖的子任务
         for st in sub_tasks:
             if not st.depends_on:
                 tid, swarm_task = self._schedule(st)
                 st.swarm_task_id = tid
-                in_flight[st.id] = tid
+                pending_ids.append(tid)
+            else:
+                # 有依赖的子任务，依赖完成后才执行
+                pass
 
-        # 等待所有并行任务完成
-        pending_ids = [st.swarm_task_id for st in sub_tasks if st.swarm_task_id]
+        # 等待无依赖任务完成
+        if pending_ids:
+            watcher = ResultWatcher()
+            watcher.start()
+            try:
+                results = watcher.wait_for(pending_ids, timeout=self.timeout)
+            finally:
+                watcher.stop()
 
-        watcher = ResultWatcher()
-        watcher.start()
-        try:
-            results = watcher.wait_for(pending_ids, timeout=self.timeout)
-        finally:
-            watcher.stop()
+            for tid, r in results.items():
+                for st in sub_tasks:
+                    if st.swarm_task_id == tid:
+                        st.status = r.get("status", "done")
+                        st.result = r.get("result")
+                        if st.status == "failed":
+                            errors.append(f"{st.id}: {r.get('error', 'unknown')}")
+                        break
+            scheduled.update(pending_ids)
 
-        # 填充结果
-        for st in sub_tasks:
-            if st.swarm_task_id and st.swarm_task_id in results:
-                r = results[st.swarm_task_id]
-                st.status = r.get("status", "done")
-                st.result = r.get("result")
-                if st.status == "failed":
-                    errors.append(f"{st.id}: {r.get('error', 'unknown')}")
-
-        # 串行执行有依赖的（每完成一个通知一次）
+        # 3. 执行有依赖的子任务（串行）
         for st in sub_tasks:
             if st.depends_on:
-                # 检查依赖是否都已完成
-                deps_done = all(scheduled.intersection([d] + [d for d in {st.depends_on} if d in scheduled]))
-                # 简化为：所有并行任务的结果已收集，再执行串行
-                if st.id not in scheduled:
-                    tid, swarm_task = self._schedule(st)
-                    st.swarm_task_id = tid
-                    # 等待这一个
+                tid, swarm_task = self._schedule(st)
+                st.swarm_task_id = tid
+                watcher = ResultWatcher()
+                watcher.start()
+                try:
                     r = watcher.wait_for([tid], timeout=self.timeout)
-                    if tid in r:
-                        st.status = r[tid].get("status", "done")
-                        st.result = r[tid].get("result")
-                        if st.status == "failed":
-                            errors.append(f"{st.id}: {r[tid].get('error', 'unknown')}")
-                    mark_done(st.id)
+                finally:
+                    watcher.stop()
+                if tid in r:
+                    st.status = r[tid].get("status", "done")
+                    st.result = r[tid].get("result")
+                    if st.status == "failed":
+                        errors.append(f"{st.id}: {r[tid].get('error', 'unknown')}")
+                if on_progress:
+                    on_progress(st)
 
-        # 3. 聚合
+        # 4. 聚合
         final_output = self.aggregator.aggregate(sub_tasks)
 
         duration = time.time() - start_time
@@ -464,10 +572,6 @@ class Orchestrator:
 def run(description: str, timeout: float = 120.0) -> str:
     """
     一句话执行高层任务，返回聚合结果文本。
-    
-    用法:
-        result = run("搜索 Python 最新资讯并写一份报告")
-        print(result)
     """
     orc = Orchestrator(timeout=timeout)
     r = orc.run(description)
