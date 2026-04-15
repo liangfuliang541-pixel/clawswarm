@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`orchestrate.py`** (NEW): 统帅千军万马主入口脚本
+  - 一句话触发多龙虾并行 spawn → watchdog 收集结果 → 聚合输出
+  - 支持 `--timeout` / `--parallel` / `--dry-run` 参数
+  - 实测：分解"搜索AI最新进展并写报告" → 2个子任务 → sessions_spawn → 结果写入
+
+### Fixed
+- **`orchestrator.py`**: PowerShell GBK 终端 emoji 打印崩溃（`sys.stdout.reconfigure`）
+- **`orchestrator.py`**: 缺少顶层 `import sys`
+
+---
+
 ## [0.8.5] - 2026-04-16
 
 ### Added
