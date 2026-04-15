@@ -682,16 +682,23 @@ class Orchestrator:
         # spawn 类型任务 → 通过 spawn_via_agent 处理（agents 能力）
         if st.type in ("spawn", "general", "analyze", "code"):
             try:
-                from spawn_manager import spawn_via_agent
+                from spawn_manager import spawn_via_agent, wait_for_spawn
                 tid, meta = spawn_via_agent(
                     st.description,
                     task_id=f"t_{uuid.uuid4().hex[:12]}",
                     timeout=int(self.timeout),
                     label=f"orch-{st.id}",
                 )
-                print(f"   → {tid}  [{st.type}]  →  local-spawn [via agent]")
+                print(f"   → {tid}  [{st.type}]  →  local-spawn [via agent] ⏳")
+                # 同步等待 spawn 完成（后台线程处理，轮询结果文件）
+                result = wait_for_spawn(tid, timeout=int(self.timeout))
+                if result.get("status") == "timeout":
+                    print(f"   ⚠️ spawn {tid} 超时，结果可能延迟")
+                else:
+                    print(f"   ✅ spawn {tid} 完成: {str(result.get('result',''))[:80]}")
                 return tid, meta
-            except ImportError:
+            except ImportError as e:
+                print(f"   ⚠️ spawn_via_agent 不可用: {e}，降级到本地调度")
                 pass  # 降级到本地调度
 
         tid, task = create_task(

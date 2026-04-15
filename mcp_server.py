@@ -475,10 +475,29 @@ def setup_tools(server: MCPStdioServer):
         },
     }, handle_dead_letter)
 
-    # 8. clawswarm_health — 节点健康评分
+    # 8. clawswarm_health — 节点健康评分（本地 + 远程 Relay）
     def handle_health(args: dict) -> dict:
-        """计算节点健康评分"""
+        """
+        计算节点健康评分。
+
+        行为逻辑：
+        - 若 node_id 为已注册的远程节点 → 通过 Relay 执行健康检查
+          （检测 relay 连通性、gateway 状态、响应时间），结果写入 health/{node_id}.json
+        - 否则 → 使用本地 health_scorer 基于传入指标计算评分
+        """
         node_id = args.get("node_id", "unknown")
+
+        # 先尝试 relay 方式（远程节点）
+        try:
+            from relay_client import RemoteNodeManager
+            mgr = RemoteNodeManager()
+            if node_id in {n.node_id for n in mgr.nodes.values()}:
+                # 远程节点：通过 relay 执行健康检查
+                return mgr.check_health(node_id=node_id)
+        except ImportError:
+            pass
+
+        # 本地节点：使用 health_scorer
         cpu = args.get("cpu")
         memory = args.get("memory")
         success = args.get("successful_tasks", 0)

@@ -354,6 +354,131 @@ class RemoteNodeManager:
             return {"error": f"Node not found: {node_id}"}
         return node.exec(command)
 
+    def check_health(self, node_id: str = None) -> Dict[str, Any]:
+        """
+        对已注册的远程节点执行健康检查。
+
+        检查内容：
+        - Relay 连通性（ping）
+        - 远程 OpenClaw gateway 状态
+        - 响应时间测量
+
+        检查结果写入 health/{node_id}.json（每节点一个文件）。
+
+        Args:
+            node_id: 指定节点 ID（不传则检查所有已注册节点）
+
+        Returns:
+            dict: {
+                "total": int,       # 检查的节点总数
+                "healthy": int,     # 健康节点数
+                "unhealthy": int,   # 不健康节点数
+                "nodes": [          # 每节点详细结果
+                    {
+                        "node_id": str,
+                        "node_name": str,
+                        "relay_reachable": bool,
+                        "gateway_status": str,   # "ok" | "error" | "unreachable"
+                        "response_time_ms": float,
+                        "last_heartbeat": str,   # ISO timestamp
+                        "capabilities": list,
+                        "health_file": str,       # 写入路径
+                    }
+                ]
+            }
+        """
+        import statistics as stats_module
+
+        HEALTH_DIR = BASE_DIR / "health"
+        HEALTH_DIR.mkdir(parents=True, exist_ok=True)
+
+        # 确定要检查的节点列表
+        if node_id:
+            target_nodes = [self.nodes[node_id]] if node_id in self.nodes else []
+        else:
+            target_nodes = list(self.nodes.values())
+
+        results = []
+        healthy_count = 0
+        unhealthy_count = 0
+
+        for node in target_nodes:
+            start = time.time()
+            relay_reachable = False
+            gateway_status = "unreachable"
+            response_time_ms = None
+
+            try:
+                # 1. 测试 relay 连通性（ping）
+                relay_reachable = node.relay.ping()
+                response_time_ms = round((time.time() - start) * 1000, 1)
+
+                if relay_reachable:
+                    # 2. 尝试获取远程 gateway 状态
+                    try:
+                        status_result = node.exec("openclaw gateway status", wait=True, timeout=10)
+                        if status_result.get("status") == "ok":
+                            gateway_status = "ok"
+                        else:
+                            gateway_status = "error"
+                    except Exception:
+                        gateway_status = "error"
+                else:
+                    gateway_status = "unreachable"
+
+            except Exception:
+                relay_reachable = False
+                gateway_status = "unreachable"
+
+            # 判断健康状态
+            is_healthy = relay_reachable and gateway_status == "ok"
+
+            # 构建健康报告
+            health_file = HEALTH_DIR / f"{node.node_id}.json"
+            health_record = {
+                "node_id": node.node_id,
+                "node_name": node.name,
+                "relay_reachable": relay_reachable,
+                "gateway_status": gateway_status,
+                "response_time_ms": response_time_ms,
+                "last_check": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "is_healthy": is_healthy,
+                "capabilities": node.capabilities,
+                "relay_url": node.relay.relay_url,
+            }
+
+            # 写入健康状态文件
+            try:
+                with open(health_file, "w", encoding="utf-8") as f:
+                    json.dump(health_record, f, ensure_ascii=False, indent=2)
+                health_file_path = str(health_file)
+            except Exception as e:
+                health_file_path = f"WRITE_ERROR: {e}"
+
+            if is_healthy:
+                healthy_count += 1
+            else:
+                unhealthy_count += 1
+
+            results.append({
+                "node_id": node.node_id,
+                "node_name": node.name,
+                "relay_reachable": relay_reachable,
+                "gateway_status": gateway_status,
+                "response_time_ms": response_time_ms,
+                "last_heartbeat": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "is_healthy": is_healthy,
+                "capabilities": node.capabilities,
+                "health_file": health_file_path,
+            })
+
+        return {
+            "total": len(target_nodes),
+            "healthy": healthy_count,
+            "unhealthy": unhealthy_count,
+            "nodes": results,
+        }
+
 
 # ── 远程任务执行器 ────────────────────────────────────────────────────────
 
