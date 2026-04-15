@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-04-16
+
+### Added
+- **`mcp_server.py`** (NEW): MCP Server 实现 — 6个 MCP tools（spawn/poll/submit/status/nodes/aggregate）
+  - 基于 stdio 的 JSON-RPC 实现，符合 Anthropic MCP 协议
+  - 其他 Agent 可通过 MCP 协议调用 ClawSwarm
+  - 核心定位：**让龙虾间互相调用工具**
+- **`dashboard/`** (NEW): Web UI 监控面板
+  - FastAPI + WebSocket 实时推送
+  - 任务 DAG 可视化 + 节点状态 + 事件日志
+  - `python dashboard/dashboard.py --port 5000`
+- **`.github/workflows/ci.yml`** (NEW): GitHub Actions CI/CD
+  - pytest 多版本测试（Python 3.10/3.11/3.12）
+  - ruff/mypy linting
+  - Dashboard 启动测试
+  - MCP Server 初始化测试
+- **`examples/`**: 新增示例脚本
+  - `01_quickstart.py`: 快速上手（提交 + 轮询）
+  - `02_parallel.py`: 并行任务 + 结果聚合
+  - `04_mcp_demo.py`: MCP 协议调用示例
+
+### Fixed
+- `executor.py`: `RESULTS_DIR` 从字符串改为 `Path` 对象
+
+---
+
 ## [0.7.0] - 2026-04-15
 
 ### Added

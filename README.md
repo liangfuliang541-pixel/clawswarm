@@ -183,6 +183,51 @@ python dashboard/dashboard.py --port 5000
 
 ---
 
+## 🤖 MCP Server
+
+让其他 Agent 通过 MCP (Model Context Protocol) 调用 ClawSwarm。
+
+```bash
+# 直接运行 MCP 服务器（stdio 模式）
+python mcp_server.py
+
+# 通过 mcporter 调用
+mcporter call --stdio -- python mcp_server.py clawswarm_spawn '{"prompt":"Hello"}'
+```
+
+**MCP Tools**：
+
+| Tool | 作用 |
+|------|------|
+| `clawswarm_spawn` | 启动子龙虾执行任务 |
+| `clawswarm_poll` | 轮询等待结果文件 |
+| `clawswarm_submit` | 提交任务到队列 |
+| `clawswarm_status` | 获取集群整体状态 |
+| `clawswarm_nodes` | 列出所有节点 |
+| `clawswarm_aggregate` | 聚合多个结果文件 |
+
+**在 OpenClaw Skill 中使用**：
+```python
+# 通过 mcporter 调用 MCP 服务器
+result = subprocess.run([
+    "mcporter", "call", "--stdio", "--",
+    "python", "mcp_server.py", "clawswarm_spawn",
+    '{"prompt":"Search latest AI news","label":"news"}'
+], capture_output=True)
+```
+
+---
+
+## 📚 Examples
+
+```bash
+python examples/01_quickstart.py   # 快速上手：提交 + 轮询
+python examples/02_parallel.py      # 并行任务：多任务 + 聚合
+python examples/04_mcp_demo.py     # MCP 协议调用示例
+```
+
+---
+
 ## 🤝 Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
