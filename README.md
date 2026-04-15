@@ -124,6 +124,7 @@ docker compose up -d
 | [🔌 API Reference](docs/API.md) | CLI & Python API |
 | [🚀 Deployment](docs/DEPLOY.md) | Docker & local deployment guide |
 | [📖 Modules](MODULES.md) | Codebase module index |
+| [🧠 OpenClaw Skill](skill/) | One-command install into OpenClaw |
 | [🦞 About](ABOUT.md) | Project story, philosophy & roadmap |
 
 ---

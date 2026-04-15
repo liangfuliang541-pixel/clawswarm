@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-04-15
+
+### Added
+- **`skill/`** (NEW): OpenClaw Skill 包 — 一键安装到 OpenClaw
+  - `SKILL.md`：ClawSwarm 编排指令（给 AI 读的说明文档）
+  - `scripts/spawn.py`：Agent 启动脚本（通过 sessions_spawn）
+  - `scripts/poll.py`：结果轮询脚本
+  - `scripts/aggregate.py`：结果聚合脚本
+
+- **`executor._execute_spawn`** (重构): 真正的 sessions_spawn 集成
+  - 写入任务文件到 queue/，session_spawn 读取并执行
+  - 返回 task_file、result_file 路径供 AI 后续处理
+
+### Changed
+- `executor._execute_spawn`：移除 openclaw CLI fallback 逻辑
+- `executor.py`：导入 paths.RESULTS_DIR / QUEUE_DIR
+
+### Architecture
+- `sessions_spawn` 是 OpenClaw LLM tool，只能在 AI session 内部调用
+- Python 进程通过文件队列与 AI 协作
+- Skill 目录可在 `~/.openclaw/workspace/skills/clawswarm/` 安装
+
+---
+
 ## [0.6.0] - 2026-04-15
 
 ### Added

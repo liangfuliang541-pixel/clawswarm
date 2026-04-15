@@ -124,6 +124,7 @@ docker compose up -d
 | [🚀 部署指南](docs/DEPLOY.md) | Docker 和本地部署 |
 | [🦞 关于](ABOUT_CN.md) | 项目故事、设计理念与发展路线 |
 | [🗺️ 模块索引](MODULES.md) | 代码库模块说明 |
+| [🧠 OpenClaw Skill](skill/) | 一键安装到 OpenClaw |
 
 ---
 

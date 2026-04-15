@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 import traceback
 
 from models import TaskStatus, TaskMode, ExecutionResult
+from paths import RESULTS_DIR, QUEUE_DIR
+from pathlib import Path as _Path
 
 # ── 数据模型 ─────────────────────────────────────────────────────────────
 
@@ -221,42 +223,86 @@ class TaskExecutor:
             raise ValueError(f"Unknown execution mode: {mode}")
     
     async def _execute_spawn(self, ctx: ExecutionContext, task: dict) -> Any:
-        """启动子 Agent — 尝试调用 OpenClaw CLI，不可用则返回占位结果"""
+        """
+        启动子 Agent（通过 sessions_spawn）
+
+        sessions_spawn 是 OpenClaw 原生的 LLM tool。
+        当 executor 在 OpenClaw AI session 内部运行时，
+        AI 直接调用 sessions_spawn 即可。
+
+        task 格式:
+            {
+                "prompt": "Agent 执行指令",
+                "result_file": "results/spawn_xxx.json",  // 可选：指定结果文件
+                "agent_id": "main",  // 可选：目标 agent
+                "model": "gpt-4",    // 可选：指定模型
+            }
+
+        返回: {
+            "mode": "spawn",
+            "session_key": "agent:main:xxx",
+            "result_file": "...",   // 结果文件路径
+            "status": "spawned",   // 已入队，等待结果
+            "executed_at": "...",
+        }
+
+        注意: result_file 的存在即表示 agent 已完成。
+        轮询: poll.py --label <label> --timeout <seconds>
+        """
         prompt = task.get("prompt", task.get("description", ""))
-        # 无 prompt 不抛异常，降级为占位
         if not prompt:
             return {
                 "mode": "spawn",
-                "output": f"[placeholder] Spawn agent (no prompt provided)",
+                "status": "error",
+                "output": "No prompt provided for spawn mode",
                 "executed_at": datetime.now().isoformat(),
             }
 
-        # 尝试调用 openclaw CLI
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-c",
-                f"import subprocess, json; r = subprocess.run(['openclaw', 'exec', '--prompt', {repr(prompt)}], capture_output=True, text=True, timeout=60); print(r.stdout[-5000:] if r.stdout else r.stderr[-2000:])",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
-            if proc.returncode == 0 and stdout.strip():
-                return {
-                    "mode": "spawn",
-                    "prompt": prompt,
-                    "output": stdout.decode("utf-8", errors="replace")[-10000:],
-                    "executed_at": datetime.now().isoformat(),
-                    "via": "openclaw_cli",
-                }
-        except Exception:
-            pass  # openclaw 不可用，降级
+        # 生成唯一结果文件路径
+        ts = int(datetime.now().timestamp())
+        label = task.get("label", "spawn")
+        result_file = task.get("result_file") or str(
+            _Path(RESULTS_DIR) / f"spawn_{label}_{ts}.json"
+        )
+        task_file = str(_Path(QUEUE_DIR) / f"task_spawn_{label}_{ts}.json")
 
-        # 降级：模拟返回（未来接入 sessions_spawn API）
+        # 写任务详情（供 spawned agent 读取）
+        task_data = {
+            "task_id": f"task_{label}_{ts}",
+            "label": label,
+            "prompt": prompt,
+            "result_file": result_file,
+            "task_file": task_file,
+            "created_at": datetime.now().isoformat(),
+        }
+        _Path(QUEUE_DIR).mkdir(parents=True, exist_ok=True)
+        with open(task_file, "w", encoding="utf-8") as f:
+            json.dump(task_data, f, ensure_ascii=False, indent=2)
+
+        # sessions_spawn 调用方式（由 AI 执行）:
+        # sessions_spawn(
+        #     message=f"""你是 ClawSwarm agent。
+        #     读取任务: {task_file}
+        #     执行后写入: {result_file}
+        #     格式: {{"status":"success","output":"...","completed_at":"..."}}
+        #     """,
+        #     agent_id=task.get("agent_id", "main"),
+        #     model=task.get("model"),
+        #     timeout=ctx.timeout_seconds,
+        # )
+
         return {
             "mode": "spawn",
-            "prompt": prompt,
-            "output": f"[placeholder] Spawn agent with prompt: {prompt[:200]}",
-            "note": "OpenClaw CLI not available. Configure openclaw for real agent execution.",
+            "session_key": f"agent:main:spawn_{label}_{ts}",
+            "task_file": task_file,
+            "result_file": result_file,
+            "agent_id": task.get("agent_id", "main"),
+            "model": task.get("model"),
+            "status": "spawned",
+            "note": (
+                f"Task written to {task_file}.\n"
+                f"Call sessions_spawn to execute. Poll {result_file} for result."
+            ),
             "executed_at": datetime.now().isoformat(),
         }
     
