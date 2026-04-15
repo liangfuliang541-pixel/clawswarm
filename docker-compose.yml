@@ -1,0 +1,118 @@
+# ClawSwarm Docker Compose
+# ============================
+# Usage:
+#   cp .env.template .env
+#   docker-compose up -d
+#   docker-compose logs -f master
+
+version: "3.9"
+
+services:
+  # ── Master API (主调度器) ───────────────────────────────────────────────
+  master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clawswarm-master
+    ports:
+      - "5000:5000"   # Master REST API
+    environment:
+      - CLAWSWARM_BASE_DIR=/data/swarm
+      - CLAWSWARM_ENV=production
+      - CLAWSWARM_OTEL_ENABLED=${CLAWSWARM_OTEL_ENABLED:-false}
+      - CLAWSWARM_OTEL_ENDPOINT=${CLAWSWARM_OTEL_ENDPOINT:-}
+      - CLAWSWARM_WS_PORT=8765
+      - CLAWSWARM_HITL_WEBHOOK=${CLAWSWARM_HITL_WEBHOOK:-}
+    volumes:
+      - swarm-data:/data/swarm
+      - ./logs:/app/logs
+    networks:
+      - clawswarm-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    command: ["python", "master_api.py", "--host", "0.0.0.0"]
+
+  # ── Event Server (WebSocket 实时推送) ─────────────────────────────────
+  events:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clawswarm-events
+    ports:
+      - "8765:8765"   # WebSocket Event Server
+    environment:
+      - CLAWSWARM_BASE_DIR=/data/swarm
+      - CLAWSWARM_ENV=production
+      - CLAWSWARM_WS_HOST=0.0.0.0
+      - CLAWSWARM_WS_PORT=8765
+      - CLAWSWARM_METRICS_INTERVAL=10
+    volumes:
+      - swarm-data:/data/swarm
+    networks:
+      - clawswarm-net
+    depends_on:
+      - master
+    command: ["python", "events.py", "--host", "0.0.0.0"]
+
+  # ── Node Alpha (搜索+写作节点) ─────────────────────────────────────────
+  node-alpha:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clawswarm-node-alpha
+    ports:
+      - "5171:5171"   # Node API
+    environment:
+      - CLAWSWARM_BASE_DIR=/data/swarm
+      - CLAWSWARM_ENV=production
+    volumes:
+      - swarm-data:/data/swarm
+    networks:
+      - clawswarm-net
+    depends_on:
+      - master
+    command: ["python", "node_api.py", "claw_alpha", "search", "write", "code", "read"]
+
+  # ── Node Beta (分析+报告节点) ───────────────────────────────────────────
+  node-beta:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clawswarm-node-beta
+    ports:
+      - "5172:5172"   # Node API
+    environment:
+      - CLAWSWARM_BASE_DIR=/data/swarm
+      - CLAWSWARM_ENV=production
+    volumes:
+      - swarm-data:/data/swarm
+    networks:
+      - clawswarm-net
+    depends_on:
+      - master
+    command: ["python", "node_api.py", "claw_beta", "analyze", "report", "write", "read"]
+
+  # ── Optional: Jaeger (分布式追踪) ─────────────────────────────────────────
+  # jaeger:
+  #   image: jaegertracing/all-in-one:1.50
+  #   container_name: clawswarm-jaeger
+  #   ports:
+  #     - "16686:16686"  # Jaeger UI
+  #     - "4317:4317"    # OTLP gRPC
+  #     - "4318:4318"    # OTLP HTTP
+  #   environment:
+  #     - COLLECTOR_OTLP_ENABLED=true
+  #   networks:
+  #     - clawswarm-net
+
+volumes:
+  swarm-data:
+    driver: local
+
+networks:
+  clawswarm-net:
+    driver: bridge

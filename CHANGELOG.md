@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+---
+
+## [0.6.0] - 2026-04-15
+
+### Added
+- **`checkpoint.py`** (NEW): Human-in-the-Loop 检查点系统
+  - CheckpointManager：全局检查点管理（创建/等待/批准/拒绝）
+  - Checkpoint：审批点（approval/review/confirm/escalate）
+  - HITLPolicy：审批策略（always_approve / always_require / by_priority / by_task_type）
+  - 通知方式：Webhook / OpenClaw消息 / WebSocket / CLI
+  - CLI 命令：approve / reject / list / stats / set-policy / test
+  - 文件持久化：pending/approved/rejected 三层目录
+
+- **`observability.py`** (NEW): 可观察性模块（OpenTelemetry 集成）
+  - tracer：分布式追踪（OpenTelemetry span，支持 OTLP 导出）
+  - MetricsCollector：Counter/Gauge/Histogram，支持 Prometheus 格式导出
+  - StructuredLogger：JSON 结构化日志，带 trace_id
+  - EventEmitter：事件发射器（task.* / checkpoint.* / node.*）
+  - 优雅降级：无 OpenTelemetry 包时自动切换到 NoOp 实现
+  - @traced 装饰器：自动追踪函数执行
+
+- **`events.py`** (NEW): WebSocket 实时事件服务器
+  - EventServer：异步 WebSocket 服务器（端口 8765）
+  - 事件订阅：支持 glob 风格过滤（task.* / checkpoint.*）
+  - 指标推送：定期推送 Prometheus 格式指标
+  - 历史事件：最近 100 条事件缓存
+  - HTTP 端点：/health / /stats / /ws
+  - 优雅降级：无 websockets 包时模块可导入但服务不可启动
+
+### Changed
+- `observability.py`：修复 warn() 弃用警告 → 使用 warning()
+
+### Deployment (NEW)
+- **`Dockerfile`**：多阶段构建，Python 3.12 slim，暴露 5000/5171/8765 端口
+- **`docker-compose.yml`**：master + events + node-alpha + node-beta 一键启动
+- **`.env.template`**：所有环境变量模板（LLM / OpenTelemetry / WebSocket / HITL）
+- **`deploy.sh`**：一键部署脚本（local / docker / status / stop / install-deps）
+- **`requirements.txt`**：补全所有依赖（aiohttp / opentelemetry / websockets）
+- **`.gitignore`**：完善，exclude .env / queue/ / in_progress/ 等运行时文件
+
+### Testing
+- 新增 test_v060.py：20 个测试（checkpoint / observability）
+- 全量测试 84/84 全部通过（0 warnings）
+
+---
+
 ## [0.5.0] - 2026-04-15
 
 ### Added

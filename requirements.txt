@@ -1,7 +1,10 @@
 # ClawSwarm Dependencies
 # Install with: pip install -r requirements.txt
 
-# Core
+# Core HTTP
+aiohttp>=3.9.0          # Async HTTP (executor LLM clients, agent communication)
+requests>=2.31.0        # Sync HTTP (fallback)
+
 watchdog>=3.0.0          # File system monitoring
 
 # Config (YAML support)
@@ -25,3 +28,10 @@ pytest-cov>=4.1.0        # Code coverage
 black>=23.0.0            # Code formatting
 flake8>=6.0.0            # Linting
 mypy>=1.4.0             # Type checking
+
+
+# Optional: Observability (OpenTelemetry)
+opentelemetry-api>=1.20
+opentelemetry-sdk>=1.20
+opentelemetry-exporter-otlp>=1.20
+opentelemetry-instrumentation-opentelemetry-api>=1.20

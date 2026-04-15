@@ -76,3 +76,49 @@ swarm_config.json.local
 
 # Misc test files
 test_write.txt
+
+# Environment (contains secrets)
+.env
+.env.local
+.env.production
+
+# Docker
+.docker/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/*.jsonl
+logs/*.log
+metrics.prom
+
+# Data directories (contain runtime state)
+queue/*.json
+in_progress/*.json
+results/*.json
+agents/*.json
+checkpoint/pending/*.json
+checkpoint/approved/*.json
+checkpoint/rejected/*.json
+memory/**/
+
+# OS
+.DS_Store
+Thumbs.db
+*~
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Build
+dist/
+build/
+*.egg-info/
