@@ -99,13 +99,11 @@ def complete_spawn(spawn_id: str, child_session_key: str = None, result: str = N
                   status: str = "success", error: str = None):
     """
     LLM 调用 sessions_spawn 完成后，调用此函数写入结果。
-    
-    使用方法（由 LLM 在看到 spawn_queue 后调用）:
-        sessions_spawn(task=task, label=label, ...)
-        # 获取 childSessionKey 后:
-        complete_spawn(spawn_id, child_session_key=childSessionKey, result=...)
+
+    写入两个位置：
+    1. SPAWN_RESULTS_DIR/{spawn_id}.json  - spawn_manager 专用
+    2. RESULTS_DIR/r_{spawn_id}.json       - ResultWatcher 可以检测到
     """
-    result_file = SPAWN_RESULTS_DIR / f"{spawn_id}.json"
     data = {
         "spawn_id": spawn_id,
         "status": status,
@@ -115,8 +113,22 @@ def complete_spawn(spawn_id: str, child_session_key: str = None, result: str = N
     }
     if error:
         data["error"] = error
+
+    # 写入 spawn 专用结果目录
+    result_file = SPAWN_RESULTS_DIR / f"{spawn_id}.json"
     with open(result_file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    # 写入 Results_DIR（ResultWatcher 会检测这个目录）
+    from pathlib import Path
+    RESULTS_DIR = Path(__file__).parent / "swarm_data" / "results"
+    results_file = RESULTS_DIR / f"r_{spawn_id}.json"
+    with open(results_file, "w", encoding="utf-8") as f:
+        json.dump({
+            "task_id": spawn_id,
+            "status": status,
+            "result": result,
+        }, f, ensure_ascii=False, indent=2)
 
     # 删除队列请求
     req_file = SPAWN_QUEUE_DIR / f"{spawn_id}.json"
