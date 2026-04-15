@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClawSwarm Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --accent: #3b82f6;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+    --cyan: #06b6d4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'Consolas', monospace;
+    min-height: 100vh;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .header .logo { font-size: 20px; }
+  .header .title { font-size: 15px; font-weight: 600; }
+  .header .subtitle { color: var(--muted); font-size: 12px; }
+  .status-badge {
+    margin-left: auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid;
+  }
+  .status-badge.online { background: rgba(16,185,129,0.1); border-color: var(--green); color: var(--green); }
+  .status-badge.offline { background: rgba(239,68,68,0.1); border-color: var(--red); color: var(--red); }
+  .status-badge.demo { background: rgba(139,92,246,0.1); border-color: var(--purple); color: var(--purple); }
+
+  .layout { display: grid; grid-template-columns: 260px 1fr 300px; height: calc(100vh - 53px); overflow: hidden; }
+
+  /* Sidebar: Nodes */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .sidebar h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; }
+  .node-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  .node-card .name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .node-card .meta { font-size: 11px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.online { background: var(--green); }
+  .dot.offline { background: var(--red); }
+
+  /* Main content */
+  .main { overflow-y: auto; padding: 16px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-card .value { font-size: 28px; font-weight: 700; }
+  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+  .stat-card.blue .value { color: var(--accent); }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.yellow .value { color: var(--yellow); }
+  .stat-card.purple .value { color: var(--purple); }
+
+  /* Task Form */
+  .new-task {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 20px;
+  }
+  .new-task h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .new-task textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 10px;
+    resize: vertical;
+    min-height: 70px;
+    margin-bottom: 8px;
+  }
+  .new-task textarea:focus { outline: none; border-color: var(--accent); }
+  .new-task button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .new-task button:hover { opacity: 0.85; }
+
+  /* DAG */
+  .dag-section { margin-bottom: 20px; }
+  .section-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .dag-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    min-height: 180px;
+    overflow-x: auto;
+  }
+  .dag-canvas { position: relative; min-width: 100%; min-height: 140px; }
+  .dag-node {
+    position: absolute;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 120px;
+    text-align: center;
+  }
+  .dag-node:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .dag-node.pending { border-color: var(--yellow); color: var(--yellow); }
+  .dag-node.running { border-color: var(--accent); color: var(--accent); }
+  .dag-node.success { border-color: var(--green); color: var(--green); }
+  .dag-node.failed { border-color: var(--red); color: var(--red); }
+  .dag-node .task-id { font-size: 10px; color: var(--muted); margin-top: 4px; font-weight: 400; }
+  .dag-node .spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Right panel: Tasks + Events */
+  .right-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .right-panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; }
+
+  .task-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .task-item .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .task-item .task-id { color: var(--muted); font-size: 10px; }
+  .task-item .status-tag {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .status-tag.pending { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .status-tag.running { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .status-tag.success { background: rgba(16,185,129,0.15); color: var(--green); }
+  .status-tag.failed { background: rgba(239,68,68,0.15); color: var(--red); }
+  .task-item .prompt { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .event-log { margin-top: 16px; }
+  .event-item {
+    font-size: 11px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .event-item .time { color: var(--cyan); margin-right: 6px; }
+  .event-item.task_update .msg { color: var(--accent); }
+  .event-item.task_created .msg { color: var(--yellow); }
+  .event-item.task_completed .msg { color: var(--green); }
+
+  .conn-indicator {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--red);
+    transition: background 0.3s;
+  }
+  .conn-indicator.connected { background: var(--green); }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 30px 10px;
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">&#x1F98A;</span>
+  <span class="title">ClawSwarm Dashboard</span>
+  <span class="subtitle">Real-time Task Monitor</span>
+  <span class="status-badge demo" id="statusBadge">DEMO</span>
+</div>
+
+<div class="layout">
+  <!-- Left: Nodes -->
+  <div class="sidebar">
+    <h3>Nodes</h3>
+    <div id="nodeList">
+      <div class="empty-state"><div class="icon">&#x1F98A;</div>Connecting...</div>
+    </div>
+  </div>
+
+  <!-- Center: Main -->
+  <div class="main">
+    <div class="stats">
+      <div class="stat-card blue">
+        <div class="value" id="statNodes">0</div>
+        <div class="label">Nodes</div>
+      </div>
+      <div class="stat-card green">
+        <div class="value" id="statOnline">0</div>
+        <div class="label">Online</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="value" id="statPending">0</div>
+        <div class="label">Pending</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="value" id="statDone">0</div>
+        <div class="label">Done</div>
+      </div>
+    </div>
+
+    <!-- New Task -->
+    <div class="new-task">
+      <h3>Submit New Task</h3>
+      <textarea id="taskPrompt" placeholder="Describe the task in natural language..."></textarea>
+      <button onclick="submitTask()">Launch Task</button>
+    </div>
+
+    <!-- DAG -->
+    <div class="dag-section">
+      <h3 class="section-title">Task DAG</h3>
+      <div class="dag-container">
+        <div class="dag-canvas" id="dagCanvas"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Tasks + Events -->
+  <div class="right-panel">
+    <h3>Task List</h3>
+    <div id="taskList">
+      <div class="empty-state">No tasks yet</div>
+    </div>
+
+    <div class="event-log">
+      <h3>Live Events</h3>
+      <div id="eventLog"></div>
+    </div>
+  </div>
+</div>
+
+<div class="conn-indicator" id="connIndicator" title="WebSocket connection"></div>
+
+<script>
+const WS_URL = "ws://localhost:5000/ws";
+let ws = null;
+let tasks = [];
+let nodes = [];
+let events = [];
+let reconnectTimer = null;
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    document.getElementById('connIndicator').classList.add('connected');
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+  ws.onclose = ws.onerror = () => {
+    document.getElementById('connIndicator').classList.remove('connected');
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handleMessage(msg);
+    } catch(err) { console.warn('bad msg', err); }
+  };
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'init':
+      if (msg.data) {
+        if (msg.data.nodes) { nodes = msg.data.nodes.list || msg.data.nodes; renderNodes(); }
+        if (msg.data.tasks) { tasks = msg.data.tasks; renderTasks(); renderDAG(); }
+        if (msg.data.events) { events = msg.data.events; renderEvents(); }
+        if (msg.data.swarm) updateSwarmStatus(msg.data.swarm);
+      }
+      updateStats();
+      break;
+    case 'task_update':
+      // {"type":"task_update","task_id":"...","status":"..."}
+      if (msg.task_id) {
+        let t = tasks.find(t => t.id === msg.task_id || t.task_id === msg.task_id);
+        if (t) {
+          t.status = msg.status;
+        } else {
+          t = { id: msg.task_id, task_id: msg.task_id, status: msg.status };
+          tasks.push(t);
+        }
+        renderTasks();
+        renderDAG();
+        updateStats();
+        addEvent('task_update', `Task ${msg.task_id}: ${msg.status}`);
+      }
+      break;
+    case 'task_created':
+      if (msg.task) { tasks.push(msg.task); }
+      else if (msg.task_id) { tasks.push({ id: msg.task_id, status: 'pending' }); }
+      renderTasks(); renderDAG(); updateStats();
+      addEvent('task_created', `Task ${msg.task_id || msg.task?.id} submitted`);
+      break;
+    case 'task_started':
+      { const t = tasks.find(t => t.id === msg.task_id || t.task_id === msg.task_id); if (t) { t.status = 'running'; renderTasks(); renderDAG(); } updateStats(); addEvent('task_started', `Task ${msg.task_id} started`); }
+      break;
+    case 'task_completed':
+      { const t = tasks.find(t => t.id === msg.task_id || t.task_id === msg.task_id); if (t) { Object.assign(t, msg.result || {}); renderTasks(); renderDAG(); } updateStats(); addEvent('task_completed', `Task ${msg.task_id} done`); }
+      break;
+    case 'node_status_change':
+      addEvent('node_status_change', `Node ${msg.node_id}: ${msg.old} -> ${msg.new}`);
+      if (nodes.length) { renderNodes(); updateStats(); }
+      break;
+    case 'heartbeat': case 'ping': case 'pong':
+      break;
+    default:
+      if (msg.data && msg.data.monitor) {
+        const nodelist = msg.data.monitor.nodes ? (msg.data.monitor.nodes.list || []) : [];
+        if (nodelist.length) { nodes = nodelist; renderNodes(); updateStats(); }
+      }
+  }
+}
+
+function renderNodes() {
+  const el = document.getElementById('nodeList');
+  if (!nodes || !nodes.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#x1F98A;</div>Demo mode - no nodes</div>';
+    return;
+  }
+  el.innerHTML = nodes.map(n => `
+    <div class="node-card">
+      <div class="name"><span class="dot ${n.status === 'online' ? 'online' : 'offline'}"></span>${n.node_id}</div>
+      <div class="meta">${n.cpu ? 'CPU: ' + n.cpu.toFixed(1) + '%' : 'Status: ' + (n.status || 'unknown')}</div>
+      <div class="meta">${n.memory ? 'MEM: ' + n.memory.toFixed(1) + '%' : ''}</div>
+      <div class="meta">Tasks: ${n.tasks_completed || 0}</div>
+    </div>
+  `).join('');
+}
+
+function renderTasks() {
+  const el = document.getElementById('taskList');
+  if (!tasks || !tasks.length) { el.innerHTML = '<div class="empty-state">No tasks</div>'; return; }
+  el.innerHTML = tasks.slice().reverse().map(t => `
+    <div class="task-item">
+      <div class="top">
+        <span class="task-id">#${t.id || t.task_id || '?'}</span>
+        <span class="status-tag ${t.status || 'pending'}">${t.status || 'pending'}</span>
+      </div>
+      <div class="prompt">${t.prompt || t.description || ''}</div>
+    </div>
+  `).join('');
+}
+
+function renderDAG() {
+  const canvas = document.getElementById('dagCanvas');
+  if (!tasks || !tasks.length) {
+    canvas.innerHTML = '<div class="empty-state">Submit tasks to see the DAG</div>';
+    return;
+  }
+  canvas.innerHTML = '';
+  const W = 150, H = 60, GAP_X = 80, GAP_Y = 90;
+  const cols = Math.ceil(Math.sqrt(tasks.length));
+  const startX = 20, startY = 20;
+  tasks.forEach((task, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = startX + col * (W + GAP_X);
+    const y = startY + row * (H + GAP_Y);
+    const el = document.createElement('div');
+    el.className = 'dag-node ' + (task.status || 'pending');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.innerHTML = (task.status === 'running' ? '<span class="spinner"></span>' : '') +
+      (task.status || 'pending') +
+      '<div class="task-id">#' + (task.id || task.task_id || '?') + '</div>';
+    canvas.appendChild(el);
+  });
+}
+
+function renderEvents() {
+  const el = document.getElementById('eventLog');
+  if (!events || !events.length) return;
+  el.innerHTML = events.slice(-20).reverse().map(e => {
+    const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '';
+    const msg = e.msg || (e.type === 'task_update' ? `Task ${e.task_id}: ${e.status}` : e.type);
+    return '<div class="event-item ' + e.type + '"><span class="time">' + ts + '</span><span class="msg">' + msg + '</span></div>';
+  }).join('');
+}
+
+function addEvent(type, msg) {
+  events.push({ type, msg, timestamp: new Date().toISOString() });
+  if (events.length > 100) events.shift();
+  renderEvents();
+}
+
+function updateStats() {
+  document.getElementById('statNodes').textContent = nodes ? nodes.length : 0;
+  document.getElementById('statOnline').textContent = nodes ? nodes.filter(n => n.status === 'online').length : 0;
+  document.getElementById('statPending').textContent = tasks ? tasks.filter(t => t.status === 'pending' || t.status === 'running').length : 0;
+  document.getElementById('statDone').textContent = tasks ? tasks.filter(t => t.status === 'success' || t.status === 'done').length : 0;
+}
+
+function updateSwarmStatus(swarm) {
+  const badge = document.getElementById('statusBadge');
+  if (!swarm) return;
+  if (swarm.mode === 'demo') { badge.textContent = 'DEMO'; badge.className = 'status-badge demo'; }
+  else if (swarm.initialized) { badge.textContent = 'LIVE'; badge.className = 'status-badge online'; }
+  else { badge.textContent = 'OFFLINE'; badge.className = 'status-badge offline'; }
+}
+
+async function submitTask() {
+  const desc = document.getElementById('taskPrompt').value.trim();
+  if (!desc) return;
+  document.getElementById('taskPrompt').value = '';
+  try {
+    // Send via WebSocket using the specified message format
+    ws.send(JSON.stringify({ type: "submit", description: desc }));
+    addEvent('info', 'Task submitted via WebSocket');
+  } catch(e) {
+    addEvent('error', 'Submit failed: ' + e.message);
+  }
+}
+
+connect();
+</script>
+</body>
+</html>

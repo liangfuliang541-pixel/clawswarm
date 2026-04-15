@@ -13,6 +13,10 @@ import os
 import sys
 import time
 import threading
+from pathlib import Path
+
+# ClawSwarm 根目录（用于 subprocess 调用）
+_CLAWSWARM_ROOT = str(Path(__file__).parent.parent.resolve())
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -309,6 +313,59 @@ async def get_events(limit: int = Query(100, ge=1, le=500)):
     return {"total": len(events), "events": events[-limit:]}
 
 
+# ── Dashboard 任务执行 ──────────────────────────────────────────────
+
+async def _execute_dashboard_task(task_id: str, description: str):
+    """通过 orchestrator 执行 dashboard 提交的任务"""
+    try:
+        # 广播任务开始
+        await manager.broadcast({
+            "type": "task_update",
+            "task_id": task_id,
+            "status": "running",
+            "description": description[:100],
+            "timestamp": datetime.now().isoformat(),
+        })
+
+        # 调用 orchestrator 执行
+        try:
+            from clawswarm.orchestrator import run
+            result = run(description, timeout=60.0)
+            await manager.broadcast({
+                "type": "task_update",
+                "task_id": task_id,
+                "status": "done",
+                "result": result[:500] if result else "(空)",
+                "timestamp": datetime.now().isoformat(),
+            })
+        except ImportError:
+            # clawswarm 不在 path，降级到 subprocess
+            import subprocess
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-c",
+                f"import sys; sys.path.insert(0, r'{_CLAWSWARM_ROOT}'); "
+                f"from orchestrator import run; print(run({repr(description)}, timeout=60))",
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            result = stdout.decode("utf-8", errors="replace")
+            await manager.broadcast({
+                "type": "task_update",
+                "task_id": task_id,
+                "status": "done" if proc.returncode == 0 else "error",
+                "result": result[:500] or stderr.decode()[:200],
+                "timestamp": datetime.now().isoformat(),
+            })
+    except Exception as e:
+        await manager.broadcast({
+            "type": "task_update",
+            "task_id": task_id,
+            "status": "error",
+            "error": str(e)[:200],
+            "timestamp": datetime.now().isoformat(),
+        })
+
+
 # ── WebSocket 端点 ──────────────────────────────────────────────────
 
 @app.websocket("/ws")
@@ -332,6 +389,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json({
                         "type": "subscribed",
                         "topics": msg.get("topics", []),
+                        "timestamp": datetime.now().isoformat(),
+                    })
+                elif msg.get("type") == "submit":
+                    # 客户端提交新任务
+                    description = msg.get("description", "")
+                    task_id = f"dash_{int(time.time()*1000)}"
+                    if description:
+                        # 异步执行（不阻塞 WebSocket 连接）
+                        asyncio.create_task(_execute_dashboard_task(task_id, description))
+                    await websocket.send_json({
+                        "type": "task_submitted",
+                        "task_id": task_id,
+                        "description": description[:100],
                         "timestamp": datetime.now().isoformat(),
                     })
             except asyncio.TimeoutError:
