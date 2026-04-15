@@ -1,17 +1,24 @@
 # About ClawSwarm
 
-> 🦞 *一只龙虾指挥另一只龙虾*
+> 🦞 *One lobster, commands the swarm*
 
 [English](ABOUT.md) | [中文版](ABOUT_CN.md)
 
 ---
 
-## 一句话定位
+## Vision
 
-**ClawSwarm = 龙虾指挥龙虾**
+**ClawSwarm = The Lobster Commander**
 
-一只龙虾 = 一个完整的 AI Agent（Brain + Memory + Tools）
-多只龙虾协同 = 跨设备、跨平台、跨机器的分布式 Agent 编排平台
+One lobster = one complete AI Agent (Brain + Memory + Tools).
+ClawSwarm empowers a single lobster to **command an entire swarm** — like a head of state directing a nation, dispatching, coordinating, and unleashing the full potential of every agent.
+
+This is not 1-to-1 orchestration. This is a command center:
+
+- **Command** — capability-aware scheduling, priority queues, health scoring, circuit breakers
+- **Direct** — DAG orchestration, parallel execution, result aggregation, global oversight
+- **Scale** — 1 machine or 100, file queues or REST API, local or cloud
+- **Unleash** — every lobster is a full Agent: researcher, coder, writer, all collaborating freely
 
 ---
 

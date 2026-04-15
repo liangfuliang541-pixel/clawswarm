@@ -1,9 +1,9 @@
 # 🦞 ClawSwarm - 多智能体协同框架
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.8.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.8.5-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
-  <img src="https://img.shields.io/badge/tests-84%25%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-107%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-orange" alt="License">
   <img src="https://img.shields.io/badge/MCP-2024--11--05-purple" alt="MCP">
 </p>
