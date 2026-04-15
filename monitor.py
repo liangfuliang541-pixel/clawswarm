@@ -14,7 +14,6 @@ import json
 import os
 import time
 import asyncio
-import psutil
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
@@ -22,6 +21,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict, deque
 import statistics
+
+# psutil 是可选依赖
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 # ── 监控数据类型 ─────────────────────────────────────────────────────────
 
@@ -355,9 +361,11 @@ class NodeMonitor:
 # ── 系统资源监控 ─────────────────────────────────────────────────────────────
 
 class SystemMonitor:
-    """系统资源监控"""
-    
+    """系统资源监控（需要 psutil）"""
+
     def __init__(self):
+        if not HAS_PSUTIL:
+            raise ImportError("psutil is required for SystemMonitor: pip install psutil")
         self._process = psutil.Process()
     
     def get_cpu_percent(self, interval: float = 0.1) -> float:
@@ -503,7 +511,7 @@ class MonitorService:
     def __init__(self):
         self.metrics = MetricsCollector()
         self.node_monitor = NodeMonitor()
-        self.system_monitor = SystemMonitor()
+        self.system_monitor = SystemMonitor() if HAS_PSUTIL else None
         self.alert_manager = AlertManager()
         
         self._running = False
@@ -578,7 +586,7 @@ class MonitorService:
                     for n in self.node_monitor.get_nodes()
                 ]
             },
-            "system": self.system_monitor.get_all(),
+            "system": self.system_monitor.get_all() if self.system_monitor else {"status": "psutil not available"},
             "alerts": {
                 "total": len(self.alert_manager._alerts),
                 "unacknowledged": len(self.alert_manager.get_alerts(unacknowledged_only=True)),

@@ -80,31 +80,38 @@ class TestSwarmNode:
         assert hasattr(swarm_node, 'fail_task')
     
     def test_poll_task(self, swarm_dir, sample_task):
-        """测试任务轮询"""
+        """测试任务轮询（能力过滤）"""
         import swarm_node
-        
-        # 保存任务到队列
+        from paths import QUEUE_DIR, IN_PROGRESS_DIR
+
+        # 保存任务到队列（general 类型，任意节点可接）
         task_file = os.path.join(swarm_dir, "queue", f"{sample_task['id']}.json")
         with open(task_file, "w", encoding="utf-8") as f:
             json.dump(sample_task, f)
-        
-        # 轮询任务
-        swarm_node.BASE_DIR = swarm_dir
-        task = swarm_node.poll_task("test_node")
-        
+
+        # 临时替换 paths 模块的目录
+        swarm_node.QUEUE_DIR = os.path.join(swarm_dir, "queue")
+        swarm_node.IN_PROGRESS_DIR = os.path.join(swarm_dir, "in_progress")
+        swarm_node.RESULTS_DIR = os.path.join(swarm_dir, "results")
+
+        task = swarm_node.poll_task("test_node", ["general"])
+
         assert task is not None
         assert task["id"] == sample_task["id"]
     
     def test_complete_task(self, swarm_dir, sample_task):
         """测试任务完成"""
         import swarm_node
-        
+
         # 保存任务到 in_progress
         task_file = os.path.join(swarm_dir, "in_progress", f"{sample_task['id']}.json")
         with open(task_file, "w", encoding="utf-8") as f:
             json.dump(sample_task, f)
-        
-        swarm_node.BASE_DIR = swarm_dir
+
+        # 替换模块路径
+        swarm_node.IN_PROGRESS_DIR = os.path.join(swarm_dir, "in_progress")
+        swarm_node.RESULTS_DIR = os.path.join(swarm_dir, "results")
+
         swarm_node.complete_task(sample_task["id"], "OK", "test_node")
         
         # 检查结果文件
@@ -120,13 +127,16 @@ class TestSwarmNode:
     def test_fail_task(self, swarm_dir, sample_task):
         """测试任务失败"""
         import swarm_node
-        
+
         # 保存任务到 in_progress
         task_file = os.path.join(swarm_dir, "in_progress", f"{sample_task['id']}.json")
         with open(task_file, "w", encoding="utf-8") as f:
             json.dump(sample_task, f)
-        
-        swarm_node.BASE_DIR = swarm_dir
+
+        # 替换模块路径
+        swarm_node.IN_PROGRESS_DIR = os.path.join(swarm_dir, "in_progress")
+        swarm_node.RESULTS_DIR = os.path.join(swarm_dir, "results")
+
         swarm_node.fail_task(sample_task["id"], "Error occurred", "test_node")
         
         # 检查结果文件
@@ -202,7 +212,6 @@ class TestExecutor:
         """测试导入"""
         import executor
         assert hasattr(executor, 'TaskExecutor')
-        assert hasattr(executor, 'ExecutionMode')
         assert hasattr(executor, 'TaskStatus')
     
     @pytest.mark.asyncio
@@ -395,16 +404,20 @@ class TestIntegration:
         """端到端测试"""
         import swarm_node
         import executor
-        
+
+        # 替换模块路径
+        swarm_node.QUEUE_DIR = os.path.join(swarm_dir, "queue")
+        swarm_node.IN_PROGRESS_DIR = os.path.join(swarm_dir, "in_progress")
+        swarm_node.RESULTS_DIR = os.path.join(swarm_dir, "results")
+
         # 1. 添加任务到队列
         for task in sample_tasks[:5]:
             task_file = os.path.join(swarm_dir, "queue", f"{task['id']}.json")
             with open(task_file, "w", encoding="utf-8") as f:
                 json.dump(task, f)
-        
-        # 2. 轮询任务
-        swarm_node.BASE_DIR = swarm_dir
-        task = swarm_node.poll_task("test_node")
+
+        # 2. 轮询任务（传入 general 能力）
+        task = swarm_node.poll_task("test_node", ["general"])
         
         assert task is not None
         

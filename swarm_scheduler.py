@@ -17,18 +17,10 @@ ClawSwarm - 主龙虾调度器 v2
 import json, os, sys, time, uuid
 from datetime import datetime, timezone
 
-BASE_DIR       = r"D:\claw\swarm"
-QUEUE_DIR      = os.path.join(BASE_DIR, "queue")
-IN_PROGRESS_DIR = os.path.join(BASE_DIR, "in_progress")
-RESULTS_DIR    = os.path.join(BASE_DIR, "results")
-AGENTS_DIR     = os.path.join(BASE_DIR, "agents")
-LOGS_DIR       = os.path.join(BASE_DIR, "logs")
-
-os.makedirs(QUEUE_DIR,       exist_ok=True)
-os.makedirs(IN_PROGRESS_DIR, exist_ok=True)
-os.makedirs(RESULTS_DIR,    exist_ok=True)
-os.makedirs(AGENTS_DIR,     exist_ok=True)
-os.makedirs(LOGS_DIR,       exist_ok=True)
+from paths import (
+    BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR,
+    AGENTS_DIR, LOGS_DIR, can_node_handle, find_best_node,
+)
 
 # ── 配置 ─────────────────────────────────────────────────────────────────────
 STALE_THRESHOLD_SEC = 120   # 心跳超过这个秒数判定为stale
@@ -56,8 +48,13 @@ def log(msg):
 # ── 任务管理 ─────────────────────────────────────────────────────────────────
 
 def create_task(prompt, task_type="general", priority=1, metadata=None):
-    """创建一个新任务并加入队列"""
+    """创建一个新任务并加入队列，自动匹配合适节点"""
     task_id = f"t_{uuid.uuid4().hex[:12]}"
+
+    # 能力感知调度：自动选择最佳节点
+    online = get_online_nodes(STALE_THRESHOLD_SEC)
+    best = find_best_node(task_type, online)
+
     task = {
         "id":          task_id,
         "type":        task_type,
@@ -65,6 +62,7 @@ def create_task(prompt, task_type="general", priority=1, metadata=None):
         "prompt":      prompt,
         "priority":    priority,
         "status":      "pending",
+        "assigned_to": best["node_id"] if best else None,
         "created_at":  datetime.now().isoformat(),
         "retry_count": 0,
         "max_retries": 3,
@@ -73,6 +71,13 @@ def create_task(prompt, task_type="general", priority=1, metadata=None):
     }
     fpath = os.path.join(QUEUE_DIR, f"{task_id}.json")
     write_json(fpath, task)
+
+    if best:
+        log(f"[SCHED] {task_id} ({task_type}) -> {best['node_id']} "
+            f"caps={best.get('capabilities', [])}")
+    else:
+        log(f"[SCHED] {task_id} ({task_type}) -> unassigned (no capable node online)")
+
     return task_id, task
 
 def get_all_tasks():
@@ -309,7 +314,7 @@ def cmd_watch(args):
 
 class Scheduler:
     """
-    调度器类封装
+    调度器类封装（支持自定义 base_dir）
     
     用法:
         scheduler = Scheduler(base_dir="D:\\claw\\swarm")
@@ -318,24 +323,16 @@ class Scheduler:
     """
     
     def __init__(self, base_dir: str = None, poll_interval: int = 5):
-        global BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR, AGENTS_DIR, LOGS_DIR
-        
-        if base_dir:
-            BASE_DIR = base_dir
-            QUEUE_DIR = os.path.join(BASE_DIR, "queue")
-            IN_PROGRESS_DIR = os.path.join(BASE_DIR, "in_progress")
-            RESULTS_DIR = os.path.join(BASE_DIR, "results")
-            AGENTS_DIR = os.path.join(BASE_DIR, "agents")
-            LOGS_DIR = os.path.join(BASE_DIR, "logs")
-            
-            os.makedirs(QUEUE_DIR, exist_ok=True)
-            os.makedirs(IN_PROGRESS_DIR, exist_ok=True)
-            os.makedirs(RESULTS_DIR, exist_ok=True)
-            os.makedirs(AGENTS_DIR, exist_ok=True)
-            os.makedirs(LOGS_DIR, exist_ok=True)
-        
-        self.base_dir = BASE_DIR
+        self.base_dir = base_dir or BASE_DIR
+        self._queue = os.path.join(self.base_dir, "queue")
+        self._in_progress = os.path.join(self.base_dir, "in_progress")
+        self._results = os.path.join(self.base_dir, "results")
+        self._agents = os.path.join(self.base_dir, "agents")
+        self._logs = os.path.join(self.base_dir, "logs")
         self.poll_interval = poll_interval
+
+        for d in [self._queue, self._in_progress, self._results, self._agents, self._logs]:
+            os.makedirs(d, exist_ok=True)
     
     def add_task(self, task: dict) -> str:
         """添加任务"""

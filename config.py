@@ -12,7 +12,6 @@ ClawSwarm Config - 配置管理
 
 import os
 import json
-import yaml
 import copy
 import hashlib
 import threading
@@ -21,6 +20,13 @@ from typing import Dict, List, Any, Optional, Callable, Union
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
+
+# YAML 支持是可选的
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
 
 # ── 配置源优先级 ─────────────────────────────────────────────────────────
 
@@ -154,8 +160,10 @@ class ConfigManager:
         with open(full_path, "r", encoding="utf-8") as f:
             if ext in [".json"]:
                 config = json.load(f)
-            elif ext in [".yaml", ".yml"]:
+            elif ext in [".yaml", ".yml"] and HAS_YAML:
                 config = yaml.safe_load(f)
+            elif ext in [".yaml", ".yml"]:
+                raise ValueError("YAML support requires pyyaml: pip install pyyaml")
             elif ext in [".ini"]:
                 config = self._parse_ini(f.read())
             else:
@@ -308,6 +316,8 @@ class ConfigManager:
     
     def to_yaml(self) -> str:
         """导出为 YAML"""
+        if not HAS_YAML:
+            raise ValueError("YAML support requires pyyaml: pip install pyyaml")
         return yaml.dump(self.to_dict(), allow_unicode=True, default_flow_style=False)
     
     # ── 文件监控 ─────────────────────────────────────────────────────────

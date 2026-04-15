@@ -63,6 +63,16 @@ agents/*.json
 logs/*.log
 *.log
 
+# Data directory (runtime, not source)
+swarm_data/
+
 # Local config (don't commit)
 swarm_config.json.local
 .env.local
+
+# Build artifacts
+*.zip
+*.tar.gz
+
+# Misc test files
+test_write.txt

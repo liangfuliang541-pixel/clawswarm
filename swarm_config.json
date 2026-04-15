@@ -1,6 +1,7 @@
 {
   "schema": "claw-swarm/v1",
   "version": "1.0.0",
+  "base_dir": "swarm_data",
   "nodes": {
     "agent_local": {
       "node_id": "agent_local",

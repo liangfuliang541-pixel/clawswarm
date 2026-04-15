@@ -4,9 +4,7 @@
 """
 import json, os, sys, uuid
 from datetime import datetime
-
-BASE    = r"D:\claw\swarm"
-QUEUE   = os.path.join(BASE, "queue")
+from paths import QUEUE_DIR
 
 task_id = "task_" + uuid.uuid4().hex[:8]
 task = {
@@ -18,8 +16,8 @@ task = {
     "capabilities_needed": []   # 空=任意节点均可接
 }
 
-os.makedirs(QUEUE, exist_ok=True)
-with open(os.path.join(QUEUE, f"{task_id}.json"), "w", encoding="utf-8") as f:
+os.makedirs(QUEUE_DIR, exist_ok=True)
+with open(os.path.join(QUEUE_DIR, f"{task_id}.json"), "w", encoding="utf-8") as f:
     json.dump(task, f, ensure_ascii=False, indent=2)
 
 print(f"Task added: {task_id}")

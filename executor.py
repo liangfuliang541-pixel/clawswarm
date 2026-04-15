@@ -16,27 +16,9 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from enum import Enum
 import traceback
 
-# ── 执行模式 ─────────────────────────────────────────────────────────────
-
-class ExecutionMode(Enum):
-    SPAWN = "spawn"      # 启动子 Agent
-    FETCH = "fetch"     # 网页抓取
-    EXEC = "exec"       # 系统命令
-    PYTHON = "python"   # Python 代码
-    WORKFLOW = "workflow"  # 工作流组合
-
-# ── 执行状态 ─────────────────────────────────────────────────────────────
-
-class TaskStatus(Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    TIMEOUT = "timeout"
+from models import TaskStatus, TaskMode, ExecutionResult
 
 # ── 数据模型 ─────────────────────────────────────────────────────────────
 
@@ -45,24 +27,12 @@ class ExecutionContext:
     """执行上下文"""
     task_id: str
     node_id: str
-    mode: ExecutionMode
+    mode: str
     config: dict = field(default_factory=dict)
     start_time: datetime = field(default_factory=datetime.now)
     retry_count: int = 0
     max_retries: int = 3
     timeout_seconds: int = 300
-    metadata: dict = field(default_factory=dict)
-
-@dataclass
-class ExecutionResult:
-    """执行结果"""
-    task_id: str
-    status: TaskStatus
-    output: Any = None
-    error: Optional[str] = None
-    duration_seconds: float = 0
-    retries: int = 0
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     metadata: dict = field(default_factory=dict)
 
 # ── 执行器核心 ─────────────────────────────────────────────────────────────
@@ -134,7 +104,7 @@ class TaskExecutor:
         ctx = ExecutionContext(
             task_id=task.get("id", "unknown"),
             node_id=task.get("node_id", "unknown"),
-            mode=ExecutionMode(task.get("mode", "spawn")),
+            mode=task.get("mode", "spawn"),
             config=task.get("config", {}),
             timeout_seconds=task.get("timeout", self.default_timeout),
             max_retries=task.get("retries", self.default_retries),
@@ -155,7 +125,7 @@ class TaskExecutor:
                 duration = time.time() - start_time
                 exec_result = ExecutionResult(
                     task_id=ctx.task_id,
-                    status=TaskStatus.DONE,
+                    status="done",
                     output=result,
                     duration_seconds=duration,
                     retries=ctx.retry_count,
@@ -173,7 +143,7 @@ class TaskExecutor:
                     duration = time.time() - start_time
                     exec_result = ExecutionResult(
                         task_id=ctx.task_id,
-                        status=TaskStatus.TIMEOUT,
+                        status="timeout",
                         error=str(e),
                         duration_seconds=duration,
                         retries=ctx.retry_count,
@@ -190,7 +160,7 @@ class TaskExecutor:
                     duration = time.time() - start_time
                     exec_result = ExecutionResult(
                         task_id=ctx.task_id,
-                        status=TaskStatus.FAILED,
+                        status="failed",
                         error=f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}",
                         duration_seconds=duration,
                         retries=ctx.retry_count,
@@ -201,7 +171,7 @@ class TaskExecutor:
         # 理论上不会到这里
         return ExecutionResult(
             task_id=ctx.task_id,
-            status=TaskStatus.FAILED,
+            status="failed",
             error="Max retries exceeded",
         )
     
@@ -222,7 +192,7 @@ class TaskExecutor:
             if isinstance(r, Exception):
                 processed.append(ExecutionResult(
                     task_id=tasks[i].get("id", f"task_{i}"),
-                    status=TaskStatus.FAILED,
+                    status="failed",
                     error=str(r),
                 ))
             else:
@@ -235,16 +205,16 @@ class TaskExecutor:
     async def _execute_mode(self, ctx: ExecutionContext, task: dict) -> Any:
         """根据模式执行"""
         mode = ctx.mode
-        
-        if mode == ExecutionMode.SPAWN:
+
+        if mode == "spawn":
             return await self._execute_spawn(ctx, task)
-        elif mode == ExecutionMode.FETCH:
+        elif mode == "fetch":
             return await self._execute_fetch(ctx, task)
-        elif mode == ExecutionMode.EXEC:
+        elif mode == "exec":
             return await self._execute_exec(ctx, task)
-        elif mode == ExecutionMode.PYTHON:
+        elif mode == "python":
             return await self._execute_python(ctx, task)
-        elif mode == ExecutionMode.WORKFLOW:
+        elif mode == "workflow":
             return await self._execute_workflow(ctx, task)
         else:
             raise ValueError(f"Unknown execution mode: {mode}")
@@ -329,15 +299,15 @@ class TaskExecutor:
             step_ctx = ExecutionContext(
                 task_id=f"{ctx.task_id}_step_{i}",
                 node_id=ctx.node_id,
-                mode=ExecutionMode(step.get("mode", "spawn")),
+                mode=step.get("mode", "spawn"),
                 config=step.get("config", {}),
             )
-            
+
             result = await self._execute_mode(step_ctx, step)
             results.append(result)
-            
+
             # 检查是否继续
-            if step.get("stop_on_failure", False) and result.status != TaskStatus.DONE:
+            if step.get("stop_on_failure", False) and result != "done":
                 break
         
         return {
@@ -353,11 +323,11 @@ class TaskExecutor:
         """任务完成处理"""
         self._running_tasks.pop(result.task_id, None)
         self._history.append(result)
-        
-        if result.status == TaskStatus.DONE:
+
+        if result.status == "done":
             self._stats["success"] += 1
             self._trigger("on_success", result)
-        elif result.status == TaskStatus.TIMEOUT:
+        elif result.status == "timeout":
             self._stats["timeout"] += 1
             self._trigger("on_timeout", result)
         else:
@@ -385,11 +355,9 @@ class TaskExecutor:
     def cancel(self, task_id: str) -> bool:
         """取消任务"""
         if task_id in self._running_tasks:
-            # 实际实现需要更复杂的取消机制
-            ctx = self._running_tasks[task_id]
             result = ExecutionResult(
                 task_id=task_id,
-                status=TaskStatus.CANCELLED,
+                status="cancelled",
                 error="Cancelled by user",
             )
             self._complete(result)

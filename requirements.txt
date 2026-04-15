@@ -4,6 +4,12 @@
 # Core
 watchdog>=3.0.0          # File system monitoring
 
+# Config (YAML support)
+pyyaml>=6.0              # YAML config files
+
+# Optional: Enhanced monitoring
+psutil>=5.9.0            # System resource metrics (monitor module)
+
 # Optional: Enhanced logging
 colorlog>=6.7.0          # Colored console output
 

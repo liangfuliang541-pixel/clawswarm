@@ -17,65 +17,20 @@ import threading
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
-from enum import Enum
+
+from models import TaskStatus, TaskPriority, Task, Node
 
 # ── 尝试导入 FastAPI ─────────────────────────────────────────────────
 
 try:
     from fastapi import FastAPI, HTTPException, Request, Response
     from fastapi.middleware.cors import CORSMiddleware
-    from pydantic import BaseModel
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
-    # 提供一个简单的占位实现
     FastAPI = None
 
 # ── 数据模型 ─────────────────────────────────────────────────────────
-
-class TaskStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-class TaskPriority(int, Enum):
-    LOW = 0
-    NORMAL = 1
-    HIGH = 2
-    URGENT = 3
-
-@dataclass
-class Task:
-    """任务"""
-    id: str
-    type: str
-    description: str
-    prompt: str = ""
-    mode: str = "spawn"
-    priority: int = TaskPriority.NORMAL
-    status: str = TaskStatus.PENDING
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    node_id: Optional[str] = None
-    result: Any = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-@dataclass
-class Node:
-    """节点"""
-    id: str
-    name: str
-    status: str  # online, stale, offline
-    capabilities: List[str] = field(default_factory=list)
-    registered_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    last_heartbeat: str = field(default_factory=lambda: datetime.now().isoformat())
-    tasks_completed: int = 0
-    tasks_failed: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class APIResponse:
@@ -249,13 +204,13 @@ class APIServer:
             
             task = self._tasks[task_id]
             
-            if task.status in [TaskStatus.DONE, TaskStatus.FAILED]:
+            if task.status in ("done", "failed"):
                 raise HTTPException(
                     status_code=400,
                     detail=f"Cannot cancel task with status: {task.status}"
                 )
-            
-            task.status = TaskStatus.CANCELLED
+
+            task.status = "cancelled"
             task.completed_at = datetime.now().isoformat()
             
             # 保存
@@ -349,10 +304,10 @@ class APIServer:
                 data={
                     "tasks": {
                         "total": len(tasks),
-                        "pending": len([t for t in tasks if t.status == TaskStatus.PENDING]),
-                        "running": len([t for t in tasks if t.status == TaskStatus.RUNNING]),
-                        "done": len([t for t in tasks if t.status == TaskStatus.DONE]),
-                        "failed": len([t for t in tasks if t.status == TaskStatus.FAILED]),
+                        "pending": len([t for t in tasks if t.status == "pending"]),
+                        "running": len([t for t in tasks if t.status == "running"]),
+                        "done": len([t for t in tasks if t.status == "done"]),
+                        "failed": len([t for t in tasks if t.status == "failed"]),
                     },
                     "nodes": {
                         "total": len(nodes),
@@ -377,7 +332,7 @@ class APIServer:
             if event == "task.completed":
                 if task_id in self._tasks:
                     task = self._tasks[task_id]
-                    task.status = TaskStatus.DONE
+                    task.status = "done"
                     task.result = body.get("result")
                     task.completed_at = datetime.now().isoformat()
                     self._save_task(task)
@@ -385,7 +340,7 @@ class APIServer:
             elif event == "task.failed":
                 if task_id in self._tasks:
                     task = self._tasks[task_id]
-                    task.status = TaskStatus.FAILED
+                    task.status = "failed"
                     task.error = body.get("error")
                     task.completed_at = datetime.now().isoformat()
                     self._save_task(task)

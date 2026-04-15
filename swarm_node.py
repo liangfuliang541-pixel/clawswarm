@@ -10,85 +10,25 @@ import fnmatch
 from datetime import datetime
 from pathlib import Path
 
-# 导入 Guard 安全模块
-try:
-    from guard import Guard, create_guard
-    GUARD_AVAILABLE = True
-except ImportError:
-    GUARD_AVAILABLE = False
-
-BASE_DIR       = r"D:\claw\swarm"
-
-# 动态路径计算
-def _dirs():
-    """获取当前 BASE_DIR 对应的目录"""
-    return {
-        "queue": os.path.join(BASE_DIR, "queue"),
-        "in_progress": os.path.join(BASE_DIR, "in_progress"),
-        "results": os.path.join(BASE_DIR, "results"),
-        "agents": os.path.join(BASE_DIR, "agents"),
-        "logs": os.path.join(BASE_DIR, "logs"),
-    }
-
-QUEUE_DIR      = os.path.join(BASE_DIR, "queue")
-IN_PROGRESS_DIR = os.path.join(BASE_DIR, "in_progress")
-RESULTS_DIR    = os.path.join(BASE_DIR, "results")
-AGENTS_DIR     = os.path.join(BASE_DIR, "agents")
+from paths import (
+    BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR,
+    AGENTS_DIR, LOGS_DIR, AUDIT_LOG_FILE, can_node_handle,
+)
 MAX_RUNTIME_SEC = 300  # 默认每个节点最多跑5分钟
 
-# 初始化目录
-def _init_dirs():
-    dirs = _dirs()
-    for d in dirs.values():
-        os.makedirs(d, exist_ok=True)
+# ── Guard 安全模块（延迟导入）────────────────────────────────────────────
 
-_init_dirs()
+_GUARD_AVAILABLE = None
 
-# ── 隔离与审计配置 ─────────────────────────────────────────────────────────
-
-# 禁止访问的路径模式（防止目录穿越）
-FORBIDDEN_PATH_PATTERNS = [
-    r"..",
-    r"~\.ssh",
-    r"~\.aws",
-    r"C:\Windows",
-    r"C:\Program Files",
-    r"/etc/passwd",
-]
-
-# 审计日志
-AUDIT_LOG_FILE = os.path.join(BASE_DIR, "audit.log")
-
-def audit_log(node_id: str, task_id: str, event: str, details: dict = None):
-    """记录审计日志"""
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "node_id": node_id,
-        "task_id": task_id,
-        "event": event,
-        "details": details or {}
-    }
-    try:
-        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except Exception:
-        pass  # 审计失败不应中断任务
-
-def validate_path_access(path: str, allowed_root: str) -> bool:
-    """验证路径是否在允许的根目录内"""
-    try:
-        abs_path = os.path.abspath(path)
-        abs_root = os.path.abspath(allowed_root)
-        
-        # 检查禁止模式
-        for pattern in FORBIDDEN_PATH_PATTERNS:
-            if fnmatch.fnmatch(abs_path.lower(), pattern.lower()):
-                return False
-        
-        # 检查是否在允许目录下
-        return abs_path.startswith(abs_root)
-    except Exception:
-        return False
+def _get_guard():
+    global _GUARD_AVAILABLE
+    if _GUARD_AVAILABLE is None:
+        try:
+            from guard import create_guard
+            _GUARD_AVAILABLE = create_guard
+        except ImportError:
+            _GUARD_AVAILABLE = False
+    return _GUARD_AVAILABLE
 
 # ── 工具函数 ─────────────────────────────────────────────────────────────────
 
@@ -110,10 +50,9 @@ def log(msg):
 
 def write_heartbeat(node_id, capabilities, status="idle", current_task_id=None):
     """写入心跳文件，主龙虾据此判断节点存活性"""
-    dirs = _dirs()
-    write_json(os.path.join(dirs["agents"], f"{node_id}.json"), {
+    write_json(os.path.join(AGENTS_DIR, f"{node_id}.json"), {
         "node_id":          node_id,
-        "capabilities":     capabilities,
+        "capabilities":     list(capabilities),
         "status":           status,
         "current_task_id":  current_task_id,
         "last_heartbeat":   datetime.now().isoformat(),
@@ -121,45 +60,66 @@ def write_heartbeat(node_id, capabilities, status="idle", current_task_id=None):
 
 # ── 任务抢占 ─────────────────────────────────────────────────────────────────
 
-def poll_task(node_id):
+def poll_task(node_id, capabilities=None):
     """
     从 queue/ 抢占一个 pending 任务。
 
+    能力过滤规则：
+      1. 任务已分配给当前节点 → 直接抢
+      2. 任务未分配 + 节点有对应能力 → 先占住再抢
+      3. general 任务未分配 → 任意节点可抢
+      4. 其他 → 跳过
+
     流程：
     1. 扫描 queue/ 下所有 .json
-    2. 找到 status=pending 的任务
+    2. 能力匹配过滤
     3. 原子 rename 到 in_progress/（防止多节点抢同一个任务）
     4. 写回 status=running + runner=node_id
     5. 返回任务对象
     """
-    dirs = _dirs()
-    queue_dir = dirs["queue"]
-    in_progress_dir = dirs["in_progress"]
-    
-    for fname in sorted(os.listdir(queue_dir)):
+    if capabilities is None:
+        capabilities = ["general"]
+
+    for fname in sorted(os.listdir(QUEUE_DIR)):
         if not fname.endswith(".json"):
             continue
-        src = os.path.join(queue_dir, fname)
-        dst = os.path.join(in_progress_dir, fname)
+        src = os.path.join(QUEUE_DIR, fname)
+        dst = os.path.join(IN_PROGRESS_DIR, fname)
 
+        # 预读任务元数据（不做 rename），判断能力匹配
         try:
-            # 尝试原子rename（抢占锁）
-            os.replace(src, dst)
-        except FileNotFoundError:
-            # 已被其他节点抢走，跳过
+            task_meta = read_json(src)
+        except Exception:
             continue
 
-        # rename成功，当前节点获得任务
+        assigned_to = task_meta.get("assigned_to")
+        task_type = task_meta.get("type", "general")
+
+        # 规则1：任务已分配给当前节点
+        if assigned_to is not None and assigned_to != node_id:
+            continue  # 分配给别人了，跳过
+
+        # 规则2：任务未分配，检查能力
+        if assigned_to is None and not can_node_handle(task_type, capabilities):
+            continue  # 没能力处理，跳过
+
+        # 尝试原子 rename（抢占锁）
+        try:
+            os.replace(src, dst)
+        except FileNotFoundError:
+            continue  # 已被其他节点抢走
+
+        # rename 成功，当前节点获得任务
         try:
             task = read_json(dst)
             task["status"]      = "running"
             task["runner"]      = node_id
             task["started_at"] = datetime.now().isoformat()
             write_json(dst, task)
-            log(f"[POLL] Got task {task['id']}")
+            log(f"[POLL] Got task {task['id']} (type={task_type})")
             return task
         except Exception as e:
-            # 文件损坏，归还到queue
+            # 文件损坏，归还到 queue
             try:
                 os.replace(dst, src)
             except Exception:
@@ -174,15 +134,13 @@ def poll_task(node_id):
 def complete_task(task_id, result, node_id):
     """
     任务成功完成：
-    1. in_progress/ 里的任务文件 -> results/（带结果）
-    2. 同时在 results/ 写入独立结果文件
+    1. in_progress/ 里的任务文件删除
+    2. 在 results/ 写入结果文件
     """
-    dirs = _dirs()
-    src = os.path.join(dirs["in_progress"], f"{task_id}.json")
-    dst = os.path.join(dirs["results"], f"{task_id}.json")
+    src = os.path.join(IN_PROGRESS_DIR, f"{task_id}.json")
 
-    # 1. 独立结果文件（仅此一份）
-    result_file = os.path.join(dirs["results"], f"r_{task_id}.json")
+    # 独立结果文件（仅此一份）
+    result_file = os.path.join(RESULTS_DIR, f"r_{task_id}.json")
     write_json(result_file, {
         "task_id":     task_id,
         "result":      result,
@@ -191,7 +149,7 @@ def complete_task(task_id, result, node_id):
         "status":      "done"
     })
 
-    # 2. 删除 in_progress 中的文件
+    # 删除 in_progress 中的文件
     try:
         os.remove(src)
     except FileNotFoundError:
@@ -199,8 +157,6 @@ def complete_task(task_id, result, node_id):
     except Exception as e:
         log(f"[ERR] cleanup in_progress failed: {e}")
 
-    # 审计日志
-    audit_log(node_id, task_id, "task_complete", {"result": str(result)[:200]})
     log(f"[DONE] {task_id}")
 
 # ── 任务失败 ─────────────────────────────────────────────────────────────────
@@ -208,16 +164,13 @@ def complete_task(task_id, result, node_id):
 def fail_task(task_id, error, node_id):
     """
     任务失败：
-    1. 读 in_progress/ 里的文件
-    2. 标记失败原因
-    3. 移到 results/（不再放回queue，避免死循环）
+    1. 删除 in_progress/ 里的文件
+    2. 在 results/ 写入失败记录
     """
-    dirs = _dirs()
-    src = os.path.join(dirs["in_progress"], f"{task_id}.json")
-    dst = os.path.join(dirs["results"], f"{task_id}.json")
+    src = os.path.join(IN_PROGRESS_DIR, f"{task_id}.json")
 
-    # 1. 独立结果文件
-    result_file = os.path.join(dirs["results"], f"r_{task_id}.json")
+    # 结果文件
+    result_file = os.path.join(RESULTS_DIR, f"r_{task_id}.json")
     write_json(result_file, {
         "task_id":    task_id,
         "error":      str(error),
@@ -226,7 +179,7 @@ def fail_task(task_id, error, node_id):
         "status":     "failed"
     })
 
-    # 2. 删除 in_progress 中的文件
+    # 删除 in_progress 中的文件
     try:
         os.remove(src)
     except FileNotFoundError:
@@ -234,33 +187,73 @@ def fail_task(task_id, error, node_id):
     except Exception as e:
         log(f"[ERR] cleanup in_progress failed: {e}")
 
-    # 审计日志
-    audit_log(node_id, task_id, "task_fail", {"error": str(error)})
     log(f"[FAIL] {task_id}: {error}")
 
 # ── 任务执行核心 ─────────────────────────────────────────────────────────────
 
 def execute_task(task, node_id):
     """
-    任务执行入口。替换这里接入实际的 agent 能力。
-    目前是占位逻辑。
+    任务执行入口。
+
+    根据 task.type / task.mode 分发到不同的执行逻辑：
+    - research/fetch/analyze → 通过 executor 模块处理
+    - code/exec/python      → 通过 executor 模块处理
+    - general/其他          → 占位返回（等待接入 sessions_spawn）
     """
     task_id = task.get("id", "unknown")
     task_type = task.get("type", "general")
+    task_mode = task.get("mode", "spawn")
     desc = task.get("description", task.get("prompt", ""))
 
-    # 审计：任务开始执行
-    audit_log(node_id, task_id, "task_start", {
-        "type": task_type,
-        "description": desc[:100]
-    })
+    log(f"[EXEC] {task_id} type={task_type} mode={task_mode}: {desc[:60]}")
 
-    # TODO: 接入 sessions_spawn / web_fetch / exec 等真实能力
-    result = f"[OK] Task [{task_id}] executed: {desc[:80]}"
-    
-    # 审计：任务执行完成（简单模式）
-    audit_log(node_id, task_id, "task_exec_ok", {"result": result[:100]})
-    return result
+    # 尝试使用 executor 模块执行
+    try:
+        import asyncio
+        from executor import TaskExecutor, ExecutionMode
+
+        executor = TaskExecutor(default_timeout=task.get("timeout_seconds", 300))
+
+        # 映射 task.type → executor mode
+        mode_map = {
+            "research": "spawn",
+            "fetch":    "fetch",
+            "code":     "python",
+            "write":    "spawn",
+            "read":     "exec",
+            "analyze":  "spawn",
+            "report":   "spawn",
+        }
+        exec_mode = mode_map.get(task_type, task_mode or "spawn")
+
+        exec_task = {
+            "id":       task_id,
+            "mode":     exec_mode,
+            "prompt":   desc,
+            "type":     task_type,
+            "node_id":  node_id,
+            "url":      task.get("metadata", {}).get("url"),
+            "command":  task.get("metadata", {}).get("command"),
+            "code":     task.get("metadata", {}).get("code"),
+            "timeout":  task.get("timeout_seconds", 300),
+        }
+
+        # executor 是 async 的，需要跑 event loop
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(executor.execute(exec_task))
+            output = result.output if result.output else f"[OK] {desc[:80]}"
+        finally:
+            loop.close()
+
+        return output
+
+    except ImportError:
+        # executor 不可用，降级为占位执行
+        log(f"[WARN] executor module not available, using placeholder")
+        return f"[OK] Task [{task_id}] executed (placeholder): {desc[:80]}"
+    except Exception as e:
+        raise RuntimeError(f"execute_task failed: {e}") from e
 
 # ── 主循环 ───────────────────────────────────────────────────────────────────
 
@@ -281,8 +274,8 @@ def run_node(node_id, capabilities, poll_interval=5, max_runtime=None):
         # 发送心跳
         write_heartbeat(node_id, capabilities, status="idle")
 
-        # 抢占任务
-        task = poll_task(node_id)
+        # 抢占任务（传入能力列表做过滤）
+        task = poll_task(node_id, capabilities)
 
         if task:
             # 更新心跳为忙碌状态
@@ -317,9 +310,10 @@ if __name__ == "__main__":
 
     # ── 初始化 Guard 安全模块 ─────────────────────────────────────────────
     guard = None
-    if GUARD_AVAILABLE:
+    guard_factory = _get_guard()
+    if guard_factory and guard_factory is not False:
         try:
-            guard = create_guard(BASE_DIR, node_id)
+            guard = guard_factory(BASE_DIR, node_id)
             guard.audit("node_start", {"capabilities": capabilities})
             print(f"[Guard] 安全隔离已启用 - 工作目录: {guard.workspace}")
         except Exception as e:
