@@ -2,7 +2,7 @@
 
 <div align="center">
 
-*[English](README.md)* | *中文版*
+*[English](README.md)* | *中文版* | *[关于](ABOUT_CN.md)*
 
 *让多个 AI Agent 像龙虾群一样协同工作*
 
@@ -122,6 +122,7 @@ docker compose up -d
 | [⚙️ 节点配置](docs/NODE-CONFIG.md) | 节点配置指南 |
 | [🔌 API 参考](docs/API.md) | 命令行和 Python API |
 | [🚀 部署指南](docs/DEPLOY.md) | Docker 和本地部署 |
+| [🦞 关于](ABOUT_CN.md) | 项目故事、设计理念与发展路线 |
 | [🗺️ 模块索引](MODULES.md) | 代码库模块说明 |
 
 ---

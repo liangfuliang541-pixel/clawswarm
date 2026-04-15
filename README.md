@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**[English](README.md)** | **[中文](README_CN.md)**
+**[English](README.md)** | **[中文](README_CN.md)** | **[About](ABOUT.md)**
 
 *Coordinate multiple AI Agents like a lobster swarm*
 
@@ -123,7 +123,8 @@ docker compose up -d
 | [⚙️ Node Config](docs/NODE-CONFIG.md) | Node configuration guide |
 | [🔌 API Reference](docs/API.md) | CLI & Python API |
 | [🚀 Deployment](docs/DEPLOY.md) | Docker & local deployment guide |
-| [🗺️ Modules](MODULES.md) | Codebase module index |
+| [📖 Modules](MODULES.md) | Codebase module index |
+| [🦞 About](ABOUT.md) | Project story, philosophy & roadmap |
 
 ---
 
