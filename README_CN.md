@@ -1,7 +1,7 @@
 # 🦞 ClawSwarm - 多智能体协同框架
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.8.5-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.9.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
   <img src="https://img.shields.io/badge/tests-107%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-AGPL%20v3-orange" alt="License">
@@ -115,6 +115,26 @@ docker compose up -d
 ```
 
 ---
+
+## 💠 一键编排
+
+```bash
+# 分解任务为子任务、入队、并打印供 AI 调用的 spawn 命令
+python orchestrate.py "搜索 AI 新闻并撰写对比报告"
+
+# 交互式演示，支持 4 种预设场景
+python demo.py
+
+# 指定场景
+python demo.py --scenario ai-news
+
+# 自定义任务
+python demo.py --custom "分析 MCP 协议并给出实现建议"
+```
+
+> 设置 `OPENAI_API_KEY` 环境变量可启用 LLM 驱动的任务分解（GPT-4o-mini）。不设置则使用规则引擎。
+
+
 
 ## 📖 文档
 
