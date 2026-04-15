@@ -1,237 +1,186 @@
 # About ClawSwarm
 
-> 🦞 *Coordinate multiple AI Agents like a lobster swarm*
+> 🦞 *一只龙虾指挥另一只龙虾*
 
-[English](ABOUT.md) | [中文](ABOUT_CN.md)
-
----
-
-## What Is ClawSwarm?
-
-ClawSwarm is an **OpenClaw-native multi-agent orchestration platform** that lets you describe a complex task in plain language and have it automatically decomposed, distributed, executed, and aggregated by a swarm of specialized AI agents.
-
-You write this:
-
-```
-"帮我调研 AI Agent 领域的最新进展，搜索技术趋势，分析主流产品，最后生成一份报告"
-```
-
-ClawSwarm does this automatically:
-
-```
-task_001 [fetch]   → claw_alpha (search+analyze)
-task_002 [fetch]   → claw_beta  (search+write)
-                      ↓ (both done)
-task_003 [report]  → claw_gamma (report)
-                      ↓
-              📋 Final Aggregated Report
-```
-
-**No Python code required.** JSON files or natural language — that's it.
+[English](ABOUT.md) | [中文版](ABOUT_CN.md)
 
 ---
 
-## The Story
+## 一句话定位
 
-This project started because existing multi-agent frameworks have a fundamental mismatch with how AI agents actually work in production:
+**ClawSwarm = 龙虾指挥龙虾**
 
-| Problem | crewAI / AutoGen | ClawSwarm |
-|---------|-----------------|-----------|
-| Deploy on a new machine | Rewrite Python, install deps | Copy one folder |
-| Run without internet | External services required | ✅ File queue, offline OK |
-| Coordinate across 3 computers | ❌ | ✅ Shared folder, zero config |
-| Monitor real-time progress | Web UI only | WebSocket + CLI + Web UI |
-| Human approval on critical steps | ❌ | ✅ Built-in HITL |
-| See what every agent is doing | ❌ | ✅ OpenTelemetry tracing |
-| Docker one-command deploy | ❌ | ✅ `docker compose up` |
-
-ClawSwarm was built from the ground up to be **zero-infrastructure**, **cross-machine**, and **deeply integrated with OpenClaw**.
+一只龙虾 = 一个完整的 AI Agent（Brain + Memory + Tools）
+多只龙虾协同 = 跨设备、跨平台、跨机器的分布式 Agent 编排平台
 
 ---
 
-## Architecture
+## 核心洞察
+
+### 为什么 ClawSwarm 押注在正确的地方
+
+2026年4月，Anthropic 发布 Claude Managed Agents，技术博客反复强调一个词：**Agent Harness**。
+
+核心观点：
+
+> 每个 Agent 请求都应该在独立的沙箱环境里运行。
+
+顺着这条思路深挖，Anthropic 把 Agent 运行时拆成三层：
+
+| 层 | 职责 | ClawSwarm 对应 |
+|---|---|---|
+| **Brain** | 推理 + prompt 循环 + tool_call 决策 | Agent 的 LLM + 指令理解 |
+| **Hands** | 沙箱 + 工具（Bash/文件/Web/MCP） | Agent 的执行能力 |
+| **Session** | 事件日志 + SSE 流 + 断连恢复 | Agent 的记忆 + 状态 |
+
+这正是 ClawSwarm 的核心抽象：
+
+> **一只龙虾 = Brain + Hands + Session = 一个完整 Agent**
+
+Anthropic 在卖"官方托管版"，ClawSwarm 在做"去中心化版"。
+
+---
+
+## 2026 多 Agent 四条路线
+
+2026年，multi-agent 没有收敛成统一标准，反而分叉成了四条产品路线：
+
+| 路线 | 代表产品 | 核心问题 | ClawSwarm 对应 |
+|---|---|---|---|
+| **委派** | OpenAI Agents SDK | 解"任务委派" | 任务队列 + 节点分发 |
+| **隔离** | Claude Code | 解"上下文隔离" | 每个 Agent 独立 workspace |
+| **协作** | CodeBuddy | 解"团队协作" | HITL 审批 + 结果聚合 |
+| **编排** | OpenClaw | 解"运行时编排" | **ClawSwarm = 编排的编排** |
+
+第四条路线的独特价值：**龙虾可以指挥龙虾**。
+
+---
+
+## ClawSwarm 架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Your Conversation                     │
-│              "帮我调研 X 并写报告"                        │
-└──────────────────────┬──────────────────────────────────┘
-                       │ cli.py / Web UI / API
-                       ▼
-┌──────────────────────────────────────────────────────────┐
-│              ClawSwarm Orchestrator                       │
-│                                                          │
-│  ┌──────────────┐  ┌─────────────┐  ┌───────────────┐  │
-│  │  Task        │  │  DAG        │  │  Result       │  │
-│  │  Decomposer  │→ │  Scheduler  │→ │  Aggregator   │  │
-│  │  (LLM/rule) │  │  (capability)│  │  (LLM/template)│ │
-│  └──────────────┘  └─────────────┘  └───────────────┘  │
-│                                                          │
-│  ┌──────────────┐  ┌─────────────┐  ┌───────────────┐  │
-│  │ HITL         │  │ Observ-     │  │ Events        │  │
-│  │ Checkpoints  │  │ ability     │  │ (WebSocket)   │  │
-│  └──────────────┘  └─────────────┘  └───────────────┘  │
-└──────────────────────┬──────────────────────────────────┘
-                       │ File Queue / REST API
-         ┌─────────────┼─────────────┐
-         ▼             ▼             ▼
-┌─────────────────┐ ┌──────────┐ ┌──────────────┐
-│  claw_alpha     │ │ claw_beta│ │ claw_gamma   │
-│  search+write   │ │ read+    │ │ search+      │
-│  +code          │ │ write    │ │ analyze+     │
-│                 │ │          │ │ report       │
-│  executor.py    │ │ executor │ │ executor     │
-│  sessions_      │ │ .py      │ │ .py          │
-│  spawn          │ │          │ │              │
-└─────────────────┘ └──────────┘ └──────────────┘
-         │             │             │
-         └─────────────┴─────────────┘
-                       │ results/
-                       ▼
-              ┌─────────────────┐
-              │ Final Report    │
-              └─────────────────┘
+用户（自然语言任务）
+    │
+    ▼
+Orchestrator（LLM 分解）
+    │
+    ├──→ Queue（文件队列，跨设备共享）
+    │
+    ▼
+龙虾 Alpha（Brain + Hands + Session）
+    │
+    ├──→ Queue（子任务）
+    │
+    ▼
+龙虾 Beta / Gamma / ...（并行执行）
+    │
+    ▼
+结果聚合（aggregate）
+    │
+    ▼
+最终输出
 ```
 
 ---
 
-## Core Concepts
-
-### Agent Roles
-
-Agents have specialized capabilities and run as lightweight processes:
+## 龙虾模型：每个 Agent 的三层结构
 
 ```
-claw_alpha  →  researcher  (search + analyze)
-claw_beta   →  writer      (write + read)
-claw_gamma  →  analyst     (search + analyze + report)
+┌──────────────────────────────────┐
+│  🧠 Brain（LLM）                │
+│  - 指令理解 + 推理               │
+│  - 子任务分解                    │
+│  - 决策                          │
+├──────────────────────────────────┤
+│  🦷 Hands（执行层）              │
+│  - Bash / 文件 / Web Fetch       │
+│  - MCP servers（扩展工具）        │
+│  - HITL 审批（人类介入）         │
+├──────────────────────────────────┤
+│  📦 Session（状态层）            │
+│  - 记忆 + 上下文持久化           │
+│  - 工作目录隔离                  │
+│  - 凭证隔离                      │
+└──────────────────────────────────┘
 ```
-
-### Task Lifecycle
-
-```
-[Created] → [Queued] → [Assigned] → [In Progress] → [Done/Failed]
-                                    ↓
-                             [HITL Checkpoint] (optional pause)
-```
-
-### HITL (Human-in-the-Loop)
-
-Critical operations pause for human approval:
-
-```python
-# When task priority >= 5, auto-pause
-HITL_POLICY=by_priority --threshold 5
-
-# Always approve (testing)
-HITL_POLICY=always_approve
-
-# Always require approval
-HITL_POLICY=always_require
-```
-
-### DAG Execution
-
-Tasks form a directed acyclic graph:
-
-```
-    A ──┬── B
-        ├── C
-        └── D ── E
-```
-
-- A, B, C run **in parallel** (no dependencies)
-- D waits for A
-- E waits for D
 
 ---
 
-## Technology Stack
+## 与竞品的差异化
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Orchestration | Python 3.8+ | Cross-platform, batteries included |
-| LLM | OpenAI / Anthropic / Gemini / Ollama | Multi-provider abstraction |
-| Agent Runtime | OpenClaw | Native agent execution |
-| Tracing | OpenTelemetry | Vendor-neutral observability |
-| Real-time | WebSocket + FastAPI | Live updates without polling |
-| Deployment | Docker Compose | One-command production |
-| Queue | File-based (JSON) | Zero infrastructure, offline OK |
-| Security | Path whitelist + command blacklist | Sandboxed execution |
+| 维度 | ClawSwarm | crewAI | AutoGen | Anthropic Managed |
+|------|-----------|--------|---------|-------------------|
+| 跨设备协同 | ✅ SMB/共享文件夹 | ❌ | ❌ | ❌ 云端托管 |
+| 文件队列 | ✅ 无数据库依赖 | ❌ | ❌ | ❌ |
+| 运行时隔离 | ✅ 每个龙虾独立 workspace | ❌ | ❌ | ✅ 沙箱 |
+| HITL 审批 | ✅ Checkpoint | ❌ | ❌ | ❌ |
+| 分布式 | ✅ 即插即用节点 | ❌ | ❌ | ❌ |
+| 编排层级 | **编排其他编排** | 单层 | 单层 | 单层 |
 
 ---
 
-## Comparison with Alternatives
+## 技术栈
 
-| Feature | ClawSwarm | crewAI 0.88 | AutoGen 0.4 | LangGraph |
-|---------|-----------|-------------|-------------|-----------|
-| **Setup complexity** | Zero | Medium | Medium | High |
-| **Multi-machine** | ✅ | ❌ | ❌ | ❌ |
-| **Offline capable** | ✅ | ❌ | ❌ | ❌ |
-| **HITL built-in** | ✅ | ❌ | ❌ | ❌ |
-| **OpenTelemetry** | ✅ | ❌ | Partial | ❌ |
-| **WebSocket events** | ✅ | ❌ | ❌ | ❌ |
-| **Docker deploy** | ✅ | Manual | Manual | Manual |
-| **No Python for tasks** | ✅ JSON | ❌ | ❌ | ❌ |
-| **OpenClaw native** | ✅ | ❌ | ❌ | ❌ |
+- **语言**：Python 3.8+
+- **LLM**：OpenAI / Anthropic / Gemini（可混用）
+- **协议**：MCP（工具扩展）+ A2A（龙虾间通信）
+- **存储**：文件系统（JSON 队列，无数据库）
+- **传输**：SMB / 网络共享文件夹 / 云存储
+- **观测**：OpenTelemetry（可选）
+- **部署**：Docker（单命令启动）
 
 ---
 
-## Roadmap
+## 竞品对比（2026年4月）
 
-### v0.7 — OpenClaw Agent Spawn (next)
-- [ ] `_execute_spawn` → real `sessions_spawn`
-- [ ] Package as OpenClaw Skill
-- [ ] `swarm run` from OpenClaw CLI
+### Anthropic Managed Agents
+- 官方托管云平台
+- Brain/Hands/Session 三层架构
+- 沙箱隔离 + 凭证隔离
+- **ClawSwarm 的机会**：去中心化替代，本地运行，不上云
 
-### v0.8 — Web UI Dashboard
-- [ ] FastAPI dashboard (`/dashboard`)
-- [ ] Real-time task status via WebSocket
-- [ ] One-click checkpoint approval
-- [ ] Node health panel
+### OpenAI Agents SDK  
+- delegation patterns（Handoffs）
+- Manager → Expert Agent 委派模式
+- **ClawSwarm 的机会**：更灵活的调度 + 跨设备
 
-### v1.0 — Production Ready
-- [ ] DAG visualizer
-- [ ] Prometheus metrics endpoint
-- [ ] SMB shared folder deployment guide
-- [ ] GitHub Actions CI/CD
-
-### Future
-- [ ] LangChain / LlamaIndex integration
-- [ ] Cloud-native mode (Redis + PostgreSQL)
-- [ ] Web-based DAG editor
-- [ ] Commercial license (AGPL + enterprise)
+### LangGraph / AutoGen / CrewAI
+- 单机 Python 框架
+- **ClawSwarm 的机会**：跨机器 + 文件队列 + 无数据库
 
 ---
 
-## Philosophy
+## 发展路线
 
-1. **Zero infrastructure** — If it needs a database, a message queue, or a service mesh to run, it's not ClawSwarm.
-2. **File is the API** — Task is JSON, queue is a folder, result is a file. Unix philosophy meets AI agents.
-3. **Fail gracefully** — If OpenTelemetry isn't configured, logs still work. If LLM API key is missing, rule-based fallback kicks in.
-4. **Humans in charge** — Critical operations always pause for human approval. The AI assists; humans decide.
-5. **Observable by default** — Every significant event is traced, logged, and emitted. Debugging a running swarm should be trivial.
-
----
-
-## Team & Community
-
-- **Author**: [liangfuliang541-pixel](https://github.com/liangfuliang541-pixel)
-- **License**: [AGPL v3](LICENSE)
-- **Issues**: [GitHub Issues](https://github.com/liangfuliang541-pixel/clawswarm/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/liangfuliang541-pixel/clawswarm/discussions)
+| 版本 | 里程碑 | 状态 |
+|------|---------|------|
+| v0.7 | ClawSwarm Skill + sessions_spawn 集成 | ✅ 已完成 |
+| v0.8 | MCP Server（让龙虾能互相调用工具） | 🔜 下一步 |
+| v0.9 | A2A 协议（龙虾间直接通信） | 📋 规划中 |
+| v1.0 | 共享文件夹即插即用节点 | 📋 规划中 |
 
 ---
 
-## Citing
+## 为什么叫 ClawSwarm
 
-If you use ClawSwarm in your research or project, please cite:
+- **龙虾** = 一个完整的 Agent（Brain + Hands + Session）
+- **群** = 多龙虾协同，分工明确
+- **🦞** = 有个性、有能力、有记忆、独立行动
+
+就像真正的龙虾群：每只都有自己的领地，但可以协作捕猎。
+
+---
+
+## 引用
+
+如果 ClawSwarm 对你的研究有帮助，请引用：
 
 ```bibtex
-@software{clawswarm,
-  title = {ClawSwarm: OpenClaw-Native Multi-Agent Orchestration Framework},
+@software{clawswarm2026,
+  title = {ClawSwarm: OpenClaw-Native Multi-Agent Orchestration Platform},
   author = {liangfuliang541-pixel},
-  url = {https://github.com/liangfuliang541-pixel/clawswarm},
   year = {2026},
+  url = {https://github.com/liangfuliang541-pixel/clawswarm},
+  version = {0.7.0}
 }
 ```

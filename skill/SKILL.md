@@ -1,140 +1,147 @@
 ---
 name: clawswarm
-description: ClawSwarm — OpenClaw-native multi-agent orchestration. Use when user wants to run complex tasks across multiple AI agents (e.g. "swarm", "orchestrate", "multi-agent", "run this with multiple agents", "spawn agents"). Installs into workspace/skills/clawswarm/.
+description: ClawSwarm — 一只龙虾指挥另一只龙虾。跨设备、跨平台的多 Agent 编排。当用户描述需要多 AI Agent 协同完成复杂任务时触发（如"多 agent"、"spawn"、"orchestrate"、"龙虾"、"swarm"、"multi-agent"）。
 metadata: { "openclaw": { "emoji": "🦞" } }
 ---
 
-# ClawSwarm — OpenClaw Multi-Agent Orchestration
+# ClawSwarm — 一只龙虾指挥另一只龙虾
 
-## What Is This?
+## 核心定位
 
-ClawSwarm lets you coordinate multiple OpenClaw agents to work together on complex tasks. Think of it as a "team of AI agents" — each agent specializes in a different part of the task, and they coordinate through file queues.
+🦞 **一只龙虾 = 一个完整 Agent**（Brain + Hands + Session）
 
-## When To Use This
+🐉 **ClawSwarm = 龙虾指挥龙虾**（跨设备、跨平台分布式编排）
 
-Use when the user describes:
-- "用多个 agent 完成这个任务" / "spawn agents"
-- "让多个 AI 同时处理" / "parallel AI processing"
-- "orchestrate" / "multi-agent" / "swarm"
-- A task complex enough to benefit from decomposition (e.g., "研究 X，分析 Y，写报告 Z")
+---
 
-**Do NOT use** for simple one-shot tasks that a single agent can handle.
+## 什么时候用
 
-## Architecture
+当用户说：
+- "多 agent 协同完成" / "spawn agents" / "orchestrate"
+- "让多个 AI 同时处理" / "龙虾" / "swarm"
+- 复杂任务需要分解（"研究 X，分析 Y，写报告 Z"）
+
+**不要用**：单 Agent 能直接搞定的任务。
+
+---
+
+## 架构（龙虾指挥龙虾）
 
 ```
-You (Orchestrator) ← This is YOU, the AI
+用户（自然语言）
     │
-    ├── sessions_spawn → sub-agent-1 (research)
-    │   tool call          ↓ writes results/spawn_research_*.json
-    ├── sessions_spawn → sub-agent-2 (write)
-    │   tool call          ↓ writes results/spawn_write_*.json
-    ├── sessions_spawn → sub-agent-3 (code)
-    │   tool call          ↓ writes results/spawn_code_*.json
+    ▼
+我（Orchestrator = 主龙虾 🦞）
     │
-    ├── Poll/await all result files
+    ├── sessions_spawn ──→ 子龙虾 Alpha（research）
+    │                      ↓ 写入 results/spawn_*.json
+    ├── sessions_spawn ──→ 子龙虾 Beta（write）
+    │                      ↓ 写入 results/spawn_*.json
+    ├── sessions_spawn ──→ 子龙虾 Gamma（code）
+    │                      ↓ 写入 results/spawn_*.json
     │
-    └── Aggregate → Final output
+    ├── poll.py ────────→ 等待结果文件
+    │
+    └── aggregate.py ────→ 聚合 → 最终输出
 ```
 
-**Key**: `sessions_spawn` is available as an AI tool. You (the AI) can call it directly.
+---
 
-## How To Orchestrate (Step by Step)
+## 编排流程
 
-When the user asks for a multi-agent task, follow this workflow:
+### Step 1 — 分解任务
 
-### Step 1 — Decompose
-Understand the task and break it into 2-5 independent subtasks.
+把复杂任务拆成 2-5 个可并行的子任务。每个子任务：
+- 有明确边界
+- 可独立执行
+- 结果可聚合
 
-### Step 2 — Spawn in Parallel
-Call `sessions_spawn` as a tool for each independent subtask **simultaneously**.
+### Step 2 — 并行 Spawn
+
+同时调用 `sessions_spawn` 启动多个子龙虾：
 
 ```
 sessions_spawn(
-    message="TASK PROMPT: [include full task + result file path]",
+    message="TASK: [完整任务描述]
+结果文件: [results/spawn_标签_时间戳.json]
+请执行完成后将结果写入该文件。",
     agent_id="main",
     timeout=120
 )
 ```
 
-The spawned agent will:
-1. Receive the task prompt
-2. Execute it
-3. Write result to `results/spawn_<label>_<timestamp>.json`
-
-### Step 3 — Poll for Results
-Use `scripts/poll.py` to wait for each result file:
+### Step 3 — 等待结果
 
 ```bash
 python scripts/poll.py --label research --timeout 120
 python scripts/poll.py --label write --timeout 120
 ```
 
-### Step 4 — Aggregate
-Combine results with `scripts/aggregate.py`:
+### Step 4 — 聚合输出
 
 ```bash
 python scripts/aggregate.py --labels research,write --output final.json
 ```
 
-## Available Scripts
+---
 
-### `scripts/poll.py` — Wait for a result
-```bash
-python scripts/poll.py --label LABEL --timeout SECONDS
+## 脚本说明
+
+| 脚本 | 作用 |
+|------|------|
+| `scripts/spawn.py` | 写任务到队列，返回 task/result 路径 |
+| `scripts/poll.py` | 轮询等待结果文件 |
+| `scripts/aggregate.py` | 合并多个结果文件 |
+
+---
+
+## 案例
+
+**用户**："调研 AI Agent 最新进展，分析趋势，写一份报告"
+
+**分解**：
+- Agent A（research_tech）：搜索最新技术进展
+- Agent B（research_prod）：搜索主流产品动态
+- Agent C（analysis）：分析趋势（依赖 A+B）
+- Agent D（report）：撰写报告（依赖 C）
+
+**执行**：
 ```
-Polls for a result file matching `results/*<label>*.json`.
-
-### `scripts/aggregate.py` — Combine multiple results
-```bash
-python scripts/aggregate.py --labels LABEL1,LABEL2 --output FINAL.json
-```
-Reads all matching result files and writes aggregated output.
-
-## Environment Variables
-
-```bash
-# LLM API (for decompose.py and agent prompts)
-OPENAI_API_KEY=sk-...        # Optional: for task decomposition
-ANTHROPIC_API_KEY=sk-ant-... # Optional: alternative LLM
-
-# ClawSwarm config (optional)
-CLAWSWARM_RESULTS_DIR=./results  # Default: ./results
-CLAWSWARM_SHARED_DIR=D:/claw/swarm  # Shared folder for multi-machine
+sessions_spawn(A) + sessions_spawn(B)  → 并行
+poll.py 等待 A+B 完成
+sessions_spawn(C)                      → 顺序
+sessions_spawn(D)                      → 顺序
+aggregate.py → final.json
 ```
 
-## Example Workflow
+---
 
-1. User asks: "调研 AI Agent 最新进展，写一份报告"
+## 设计原则
 
-2. Break down into subtasks:
-   - Agent A: 搜索 AI Agent 最新技术进展 → results/spawn_research_tech.json
-   - Agent B: 搜索主流 AI Agent 产品 → results/spawn_research_prod.json
-   - Agent C: 写报告（依赖 A+B）→ results/spawn_report.json
+1. **先分解**：复杂任务必须先拆解，不能直接 spawn
+2. **能并行就并行**：独立任务同时执行
+3. **文件通信**：Agent 间通过 JSON 文件传递结果
+4. **超时控制**：每个 spawn 都设 timeout，避免挂起
+5. **聚合为终**：最终答案来自所有子 Agent 输出的聚合
 
-3. Spawn in parallel (call sessions_spawn for A and B simultaneously):
-   ```
-   sessions_spawn(message="[Agent A task + result file]", agent_id="main", timeout=120)
-   sessions_spawn(message="[Agent B task + result file]", agent_id="main", timeout=120)
-   ```
+---
 
-4. Poll for results, then spawn Agent C
+## 故障排查
 
-5. Aggregate: `aggregate.py --labels research_tech,research_prod,report --output final.json`
+- **Agent 挂起**：检查 timeout，检查结果文件是否写入
+- **无输出**：检查 results/ 目录
+- **权限错误**：确保目录存在且可写
 
-6. Return final report to user
+---
 
-## Key Principles
+## 研究参考
 
-1. **Decompose first** — complex tasks must be broken down before spawning
-2. **Parallel where possible** — independent tasks run simultaneously
-3. **File-based communication** — agents communicate via JSON files in results/
-4. **Timeout everything** — always set reasonable timeouts to avoid hanging
-5. **Aggregate last** — final answer combines all sub-agent outputs
+2026年4月调研结论：
 
-## Troubleshooting
-
-- **Agent hangs**: Use --timeout, check result file was written
-- **No output**: Check results/ directory for output files
-- **API errors**: Ensure LLM API keys are set in environment
-- **Permission errors**: Ensure results/ directory exists and is writable
+| 发现 | 来源 | 对 ClawSwarm 的意义 |
+|------|------|---------------------|
+| Anthropic Managed Agents = Brain/Hands/Session 三层 | Anthropic 官方博客 | 验证"龙虾"抽象是正确的 |
+| Agent Harness = 独立沙箱运行 | Anthropic Engineering | ClawSwarm 每个龙虾独立 workspace 正是此架构 |
+| 2026 多 Agent 分叉四条路线 | CSDN 技术分析 | OpenClaw = 运行时编排，ClawSwarm = 编排的编排 |
+| MCP 协议 = 工具扩展标准 | Anthropic/Google | 未来让龙虾间互相调用工具 |
+| A2A 协议 = Agent 间通信 | Google | 未来龙虾间直接通信协商 |
