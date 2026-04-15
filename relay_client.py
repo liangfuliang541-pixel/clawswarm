@@ -243,14 +243,21 @@ class RemoteNode:
         with open(self.config_file, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
 
-        return {"status": "registered", "node_id": self.node_id, "config": str(self.config_file)}
+        # 测试 relay 连通性
+        connection_ok = self.relay.ping()
+        return {
+            "status": "registered",
+            "node_id": self.node_id,
+            "config": str(self.config_file),
+            "connection_test": "ok" if connection_ok else "failed",
+        }
 
     def unregister(self) -> None:
         """从集群注销节点"""
         if self.config_file.exists():
             self.config_file.unlink()
 
-    def exec(self, command: str, wait: bool = True) -> Dict[str, Any]:
+    def exec(self, command: str, wait: bool = True, timeout: int = None) -> Dict[str, Any]:
         """
         在远程节点上执行命令（通过 Relay）
 
@@ -259,7 +266,7 @@ class RemoteNode:
         """
         # 先更新 last_seen
         self._touch()
-        return self.relay.exec(command, wait=wait)
+        return self.relay.exec(command, wait=wait, timeout=timeout)
 
     def get_openclaw_status(self) -> Dict[str, Any]:
         """获取远程 OpenClaw gateway 状态"""
