@@ -22,13 +22,24 @@ ClawSwarm Orchestrator - 任务编排器
   用户: 收到结构化结果
 """
 
-import os, re, time, json, uuid, asyncio, threading
+import os, re, time, json, uuid, asyncio, threading, sys
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from collections import defaultdict
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except:
+    pass
+
+
 from paths import QUEUE_DIR, RESULTS_DIR, AGENTS_DIR, ensure_dirs, can_node_handle, find_best_node
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except:
+    pass
 from swarm_scheduler import create_task, get_online_nodes
 
 # LLM 支持（可选，无 API Key 时降级到规则引擎）
