@@ -67,7 +67,7 @@ CAPABILITY_MAP = {
     "fetch":     ["search"],            # 抓取网页，节点有 search 即可
     "write":     ["write"],
     "read":      ["read"],
-    "report":    ["report", "write"],
+    "report":    ["write"],
     "analyze":   ["analyze"],
     "shell":     ["shell"],             # Shell 命令执行（远程节点专有）
     "general":   ["*"],

@@ -67,6 +67,9 @@ TASK_KEYWORDS: Dict[str, List[str]] = {
     "report":  ["写", "生成", "撰写", "报告", "摘要", "总结", "整理", "report", "draft", "summarize"],
     "code":    ["代码", "编程", "实现", "函数", "class", "code", "implement", "develop", "program"],
     "read":    ["读", "读取", "打开", "查看", "检查", "read", "open", "view", "check"],
+    # shell: 远程节点专有（Kimi Claw），调度器会强制通过 relay 路由
+    "shell":   ["执行", "命令", "shell", "bash", "ssh", "远程", "hostname", "uptime",
+                "服务器", "server", "linux", "ubuntu", "cmd", "console", "terminal"],
 }
 
 SPLITTERS = re.compile(r'[，,；;]|然后|接着|之后|并|同时|另外|以及|还有')
@@ -630,14 +633,76 @@ class Orchestrator:
         )
 
     def _schedule(self, st: SubTask) -> tuple:
-        """调度单个子任务到 swarm"""
+        """调度单个子任务到 swarm
+
+        策略：
+        - task_type="shell" → 强制路由到远程节点（Kimi Claw）via relay
+        - task_type="fetch" → 通过 relay fetch（远程节点有 web 能力）
+        - 其他类型 → 通过 create_task（本地调度器自动选择节点）
+        """
+        # 远程能力类型：强制通过 relay 调度到 Kimi Claw
+        REMOTE_TASK_TYPES = {"shell", "fetch"}
+
+        if st.type in REMOTE_TASK_TYPES:
+            # 检查是否有在线的远程节点
+            try:
+                from swarm_scheduler import get_online_nodes, STALE_THRESHOLD_SEC
+                from relay_client import RemoteNodeManager
+                online = get_online_nodes(STALE_THRESHOLD_SEC)
+                remote_nodes = [n for n in online if n.get("is_remote")]
+
+                if remote_nodes:
+                    # 使用第一个可用远程节点
+                    rn = remote_nodes[0]
+                    task_id = f"t_{uuid.uuid4().hex[:12]}"
+                    from relay_client import RemoteNode, exec_task_async_via_relay
+                    node = RemoteNode(
+                        node_id=rn["node_id"],
+                        relay_url=rn["relay_url"],
+                        name=rn.get("name"),
+                        capabilities=rn.get("capabilities"),
+                    )
+                    # 异步执行，结果写入 results/r_{task_id}.json
+                    exec_task_async_via_relay(
+                        task_id,
+                        st.description,
+                        node,
+                        timeout=90,
+                    )
+                    print(f"   → {task_id}  [{st.type}]  →  remote:{rn['node_id']} [via relay]")
+                    return task_id, {
+                        "id": task_id,
+                        "assigned_to": rn["node_id"],
+                        "node_type": "remote",
+                    }
+            except ImportError:
+                pass  # relay_client 不可用，降级到本地调度
+
+        # 默认：本地调度器自动选择节点（含远程节点感知）
+        # spawn 类型任务 → 通过 spawn_via_agent 处理（agents 能力）
+        if st.type in ("spawn", "general", "analyze", "code"):
+            try:
+                from spawn_manager import spawn_via_agent
+                tid, meta = spawn_via_agent(
+                    st.description,
+                    task_id=f"t_{uuid.uuid4().hex[:12]}",
+                    timeout=int(self.timeout),
+                    label=f"orch-{st.id}",
+                )
+                print(f"   → {tid}  [{st.type}]  →  local-spawn [via agent]")
+                return tid, meta
+            except ImportError:
+                pass  # 降级到本地调度
+
         tid, task = create_task(
             st.description,
             task_type=st.type,
             metadata={"sub_task_id": st.id},
         )
         node = task.get("assigned_to", "any")
-        print(f"   → {tid}  [{st.type}]  →  {node or 'unassigned'}")
+        node_type = "remote" if task.get("node_type") == "remote" else ""
+        prefix = f"remote:{node}" if node_type == "remote" else (node or "unassigned")
+        print(f"   → {tid}  [{st.type}]  →  {prefix}")
         return tid, task
 
 

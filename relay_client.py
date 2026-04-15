@@ -362,6 +362,7 @@ def create_task_via_relay(
     prompt: str,
     node: "RemoteNode",
     timeout: int = 60,
+    task_type: str = "general",
 ) -> Dict[str, Any]:
     """
     在远程节点上执行 ClawSwarm 任务。
@@ -371,16 +372,24 @@ def create_task_via_relay(
         prompt:     任务描述
         node:       RemoteNode 实例
         timeout:    执行超时（秒）
+        task_type:  任务类型（shell/fetch/general/code等）
+                    shell 类型会包装为 bash -c "..." 格式
 
     Returns:
         dict: {"status": "ok"|"error"|"timeout"|"sent", "output": ..., "elapsed": ...}
     """
     start = time.time()
 
+    # 根据 task_type 包装命令
+    if task_type == "shell":
+        # 避免单引号干扰，使用双引号并转义内部双引号
+        escaped_prompt = prompt.replace('"', '\\"')
+        command = f'bash -c "{escaped_prompt}"'
+    else:
+        command = prompt
+
     # 发送任务到远程节点
-    # Kimi Claw 上的 executor 会执行 python -c "exec(open('task.py').read())"
-    # 这里直接把 prompt 作为命令发过去
-    result = node.exec(prompt, wait=True, timeout=timeout)
+    result = node.exec(command, wait=True, timeout=timeout)
 
     # 写入本地 results/ 目录，供 orchestrator 的 ResultWatcher 读取
     from paths import RESULTS_DIR
@@ -408,22 +417,42 @@ def create_task_via_relay(
 def exec_task_async_via_relay(
     task_id: str,
     prompt: str,
-    node: "RemoteNode",
+    node_or_dict,
     timeout: int = 60,
+    task_type: str = "general",
 ) -> None:
     """
     后台线程执行远程任务（不阻塞 orchestrator 主流程）。
     任务完成后自动写入 results/r_{task_id}.json。
+
+    Args:
+        node_or_dict: RemoteNode 实例或 dict（from get_online_nodes 返回）
+        task_id:     任务ID
+        prompt:      任务描述/命令
+        node:        RemoteNode 实例
+        timeout:     执行超时（秒）
+        task_type:   任务类型（shell/fetch/general/code等）
     """
     import threading
 
     def _run():
         try:
-            create_task_via_relay(task_id, prompt, node, timeout)
+            # 转换 dict → RemoteNode
+            if isinstance(node_or_dict, dict):
+                actual_node = RemoteNode(
+                    node_id=node_or_dict["node_id"],
+                    relay_url=node_or_dict["relay_url"],
+                    name=node_or_dict.get("name"),
+                    capabilities=node_or_dict.get("capabilities"),
+                )
+            else:
+                actual_node = node_or_dict
+            create_task_via_relay(task_id, prompt, actual_node, timeout, task_type=task_type)
         except Exception as e:
             from paths import RESULTS_DIR
             import os as _os
             result_file = _os.path.join(RESULTS_DIR, f"r_{task_id}.json")
+            node_id_for_result = getattr(actual_node, 'node_id', 'unknown')
             try:
                 with open(result_file, "w", encoding="utf-8") as f:
                     json.dump({
@@ -431,7 +460,7 @@ def exec_task_async_via_relay(
                         "status": "error",
                         "result": str(e),
                         "node_type": "remote",
-                        "node_id": node.node_id,
+                        "node_id": node_id_for_result,
                     }, f, ensure_ascii=False)
             except Exception:
                 pass
