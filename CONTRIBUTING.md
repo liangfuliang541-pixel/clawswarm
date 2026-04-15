@@ -83,15 +83,73 @@ Before submitting a PR:
 
 ```bash
 # Test locally
-python -m pytest tests/
+python -m pytest tests/ -v
 
 # Run specific tests
-python -m pytest tests/test_scheduler.py -v
+python -m pytest tests/test_v060.py -v
+
+# With coverage
+python -m pytest tests/ --cov=. --cov-report=html
 ```
+
+All 84 tests must pass (including v0.6 checkpoint + observability tests).
+New modules must include tests in `tests/test_{module}.py`.
 
 ---
 
 ## 🌍 Development Setup
+
+Before adding new modules, read [MODULES.md](MODULES.md) for the full module index.
+
+---
+
+## 🏠 Module-Specific Guidelines
+
+### HITL Checkpoint (`checkpoint.py`)
+
+When adding new checkpoint types or policies:
+1. Add type/policy constants with docstrings
+2. Update `HITLPolicy.should_require()` logic
+3. Add notification handler (WebSocket/Webhook/OpenClaw)
+4. Add corresponding CLI command in `cli.py`
+5. Add tests covering all policy combinations
+
+### Observability (`observability.py`)
+
+When adding new metrics or spans:
+1. Use `@traced` decorator for all public functions
+2. Emit events via `events.emit()` for significant state changes
+3. Add Prometheus metric with descriptive labels
+4. Update `MODULES.md` with new metric names
+5. No `print()` — use `from observability import log`
+
+### WebSocket Events (`events.py`)
+
+When adding new event types:
+1. Define type constant in `observability.py` EventType enum
+2. Emit via `events.emit(type, data)` in relevant modules
+3. Document in `docs/DEPLOY.md` WebSocket protocol section
+4. Add listener test in `tests/test_v060.py`
+
+### LLM Providers (`llm.py`)
+
+When adding a new LLM provider:
+1. Create provider class inheriting `BaseLLMClient`
+2. Implement `chat()`, `tools()`, `chat_stream()` methods
+3. Register in `LLM_REGISTRY` dictionary
+4. Add tools definitions for the provider's tool-calling format
+5. Add tests with mock API responses
+6. Update `MODULES.md` provider table
+
+### OpenClaw Integration
+
+When adding OpenClaw-specific features:
+1. Check `openclaw help` for available commands
+2. Use `sessions_spawn` for spawning sub-agents
+3. Wrap OpenClaw calls in try/except for graceful degradation
+4. Test on both local and remote OpenClaw instances
+
+---
 
 ```bash
 # Clone your fork

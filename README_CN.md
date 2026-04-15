@@ -42,9 +42,13 @@
 | 📊 **结果聚合** | 收集并合并所有节点的结果 |
 | 💾 **持久化** | 基于文件的队列，重启不丢失 |
 | 🌐 **跨机器** | 局域网共享存储，支持多机器 |
-| 🔄 **容错** | 失败任务自动重试 |
-| 🔌 **OpenClaw 原生** | 无缝集成 OpenClaw Agent |
+| 🔄 **容错** | 失败任务自动重试，stale 任务自动恢复 |
+| 🔌 **OpenClaw 原生** | 通过 sessions_spawn 无缝集成 OpenClaw Agent |
 | 🌍 **双语支持** | 完整英文 + 中文文档 |
+| ⏸️ **人工审批** | 关键任务支持 HITL 检查点审批 |
+| 📡 **OpenTelemetry** | 分布式追踪 + Prometheus 指标 |
+| 🔔 **WebSocket 事件** | 实时任务/检查点事件推送 |
+| 🚢 **生产就绪** | Dockerfile + docker-compose + deploy.sh |
 
 ---
 
@@ -55,30 +59,55 @@
 ```bash
 git clone https://github.com/liangfuliang541-pixel/clawswarm.git
 cd clawswarm
+pip install -r requirements.txt
 ```
 
-### 启动节点
+### 启动 Master + 2 节点
 
 ```bash
-# 启动3节点演示集群
-python start_cluster.py
+# 方式一：部署脚本（推荐本地）
+./deploy.sh install-deps
+./deploy.sh local
 
-# 或手动启动
-python swarm_node.py claw_alpha search write code
-python swarm_node.py claw_beta read write
-python swarm_node.py claw_gamma search analyze report
+# 方式二：Docker Compose（推荐部署）
+cp .env.template .env   # 编辑 .env 填入 API key
+docker compose up -d
+
+# 方式三：手动 CLI
+python cli.py start-cluster                        # 启动3节点演示集群
+python cli.py add-task "调研2026年AI最新进展"         # 添加任务
+python cli.py status                               # 查看状态
 ```
 
 ### 添加任务
 
 ```bash
-python swarm_scheduler.py add "调研2026年AI最新进展" --type research
+# CLI 方式
+python cli.py add-task "调研AI最新进展" --type research --priority 5
+
+# REST API 方式（master 运行中）
+curl -X POST http://localhost:5000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"text":"调研AI最新进展","type":"research","priority":5}'
 ```
 
 ### 查看状态
 
 ```bash
-python swarm_scheduler.py status
+python cli.py status
+# 或通过 REST API
+curl http://localhost:5000/tasks
+```
+
+### Docker 部署
+
+```bash
+cp .env.template .env
+docker compose up -d
+# Master API:  http://localhost:5000
+# Event WS:    ws://localhost:8765
+# Node Alpha:  http://localhost:5171
+# Node Beta:   http://localhost:5172
 ```
 
 ---
@@ -92,6 +121,8 @@ python swarm_scheduler.py status
 | [📝 任务格式](docs/TASK-FORMAT.md) | 任务 JSON 规范 |
 | [⚙️ 节点配置](docs/NODE-CONFIG.md) | 节点配置指南 |
 | [🔌 API 参考](docs/API.md) | 命令行和 Python API |
+| [🚀 部署指南](docs/DEPLOY.md) | Docker 和本地部署 |
+| [🗺️ 模块索引](MODULES.md) | 代码库模块说明 |
 
 ---
 

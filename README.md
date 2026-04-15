@@ -41,11 +41,15 @@
 | 🦞 **Multi-Node Coordination** | One Master coordinates multiple Node Agents |
 | 🧠 **Smart Scheduling** | Auto-assign tasks based on node capabilities |
 | 📊 **Result Aggregation** | Collect and merge results from all nodes |
-| 💾 **Persistence** | File-based queue survives restarts |
+| 💾 **Persistence** | File-based queue queue survives restarts |
 | 🌐 **Cross-Machine** | Works across LAN via shared storage |
-| 🔄 **Fault Tolerance** | Auto-retry failed tasks |
-| 🔌 **OpenClaw Native** | Seamless OpenClaw Agent integration |
+| 🔄 **Fault Tolerance** | Auto-retry failed tasks, stale task recovery |
+| 🔌 **OpenClaw Native** | Seamless OpenClaw Agent integration via sessions_spawn |
 | 🌍 **Bilingual** | Full English + Chinese documentation |
+| ⏸️ **Human-in-the-Loop** | Checkpoint approval for critical tasks |
+| 📡 **OpenTelemetry** | Distributed tracing + Prometheus metrics |
+| 🔔 **WebSocket Events** | Real-time task/checkpoint event streams |
+| 🚢 **Production Ready** | Dockerfile + docker-compose + deploy.sh |
 
 ---
 
@@ -56,30 +60,55 @@
 ```bash
 git clone https://github.com/liangfuliang541-pixel/clawswarm.git
 cd clawswarm
+pip install -r requirements.txt
 ```
 
-### Start Nodes
+### Start Master + 2 Nodes
 
 ```bash
-# Start 3-node demo cluster
-python start_cluster.py
+# Option 1: Use deploy script (recommended)
+./deploy.sh install-deps
+./deploy.sh local
 
-# Or start manually
-python swarm_node.py claw_alpha search write code
-python swarm_node.py claw_beta read write
-python swarm_node.py claw_gamma search analyze report
+# Option 2: Docker Compose (recommended for deployment)
+cp .env.template .env   # edit .env with your API keys
+docker compose up -d
+
+# Option 3: Manual CLI
+python cli.py start-cluster           # start 3-node demo cluster
+python cli.py add-task "调研2026年AI最新进展"  # add a task
+python cli.py status                  # check status
 ```
 
 ### Add Tasks
 
 ```bash
-python swarm_scheduler.py add "Research latest AI trends" --type research
+# Add a task via CLI
+python cli.py add-task "Research latest AI trends" --type research --priority 5
+
+# Add via REST API (master running)
+curl -X POST http://localhost:5000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Research latest AI trends","type":"research","priority":5}'
 ```
 
 ### Check Status
 
 ```bash
-python swarm_scheduler.py status
+python cli.py status
+# or via REST API
+curl http://localhost:5000/tasks
+```
+
+### Docker Deployment
+
+```bash
+cp .env.template .env
+docker compose up -d
+# Master API:  http://localhost:5000
+# Event WS:    ws://localhost:8765
+# Node Alpha:  http://localhost:5171
+# Node Beta:   http://localhost:5172
 ```
 
 ---
@@ -93,6 +122,8 @@ python swarm_scheduler.py status
 | [📝 Task Format](docs/TASK-FORMAT.md) | Task JSON specification |
 | [⚙️ Node Config](docs/NODE-CONFIG.md) | Node configuration guide |
 | [🔌 API Reference](docs/API.md) | CLI & Python API |
+| [🚀 Deployment](docs/DEPLOY.md) | Docker & local deployment guide |
+| [🗺️ Modules](MODULES.md) | Codebase module index |
 
 ---
 
