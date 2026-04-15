@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.5] - 2026-04-16
+
+### Added
+- **`dead_letter.py`** (NEW): 死信队列 — enqueue/list/retry/purge/stats
+- **`health_scorer.py`** (NEW): 节点健康评分 — 5 维加权（heartbeat/success_rate/load/response_time/error_rate）
+  - 4 级健康：healthy/degraded/warning/critical
+  - 熔断建议 + 任务优先级限制
+- **`result_pipeline.py`** (NEW): 结果聚合流水线 — 5 阶段（collect/filter/transform/aggregate/export）
+- **MCP Server**: 6 → 8 tools
+  - `clawswarm_dead_letter`: 死信队列管理（list/retry/purge/stats）
+  - `clawswarm_health`: 节点健康评分（5 维分解 + 熔断建议）
+- **`paths.py`**: 新增 `DEAD_LETTER_DIR` + `PIPELINE_DIR`
+- **README.md / README_CN.md**: 顶部 badge + Features 重写
+
+### Tests
+- `tests/test_v085.py`: 23 new tests (DLQ: 7, Health: 6, Pipeline: 7, MCP: 3)
+- Total: 84 → 107 tests, all passing
+
+---
+
 ## [0.8.0] - 2026-04-16
 
 ### Added

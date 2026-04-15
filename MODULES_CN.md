@@ -41,6 +41,9 @@ examples/
 ├── 01_quickstart.py        # 快速上手示例
 ├── 02_parallel.py          # 并行任务示例
 └── 04_mcp_demo.py          # MCP 协议调用示例
+dead_letter.py              # 死信队列 (Phase 2)
+health_scorer.py            # 节点健康评分 (Phase 2)
+result_pipeline.py          # 结果聚合流水线
 ```
 
 ---
@@ -451,4 +454,67 @@ git commit -m 'fix: correct path in complete_task'
 git commit -m 'docs: update API reference'
 git commit -m 'test: add checkpoint tests'
 git commit -m 'refactor: extract LLM abstraction'
+```
+
+
+---
+
+### `dead_letter.py` — Dead Letter Queue (Phase 2)
+
+**职责**：管理失败/超时/重试耗尽的任务。
+
+**入口**：失败任务自动进入 DLQ，或手动 enqueue。
+
+| 函数 | 作用 |
+|------|------|
+| `enqueue(task, reason, detail)` | 写入 DLQ |
+| `list_entries(reason, limit)` | 列表查询 |
+| `retry(entry_id)` | 重试（移回 queue） |
+| `purge(entry_id, reason)` | 清理 |
+| `stats()` | 统计 |
+
+**DLQ 原因**：`MAX_RETRIES` / `TIMEOUT` / `NODE_FAILURE` / `MANUAL`
+
+---
+
+### `health_scorer.py` — Node Health Scorer (Phase 2)
+
+**职责**：计算节点健康评分（0-100），5 维加权。
+
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| heartbeat | 30% | 心跳新鲜度 |
+| success_rate | 25% | 任务成功率 |
+| load | 20% | CPU + 内存 |
+| response_time | 15% | 平均响应时间 |
+| error_rate | 10% | 近期错误率 |
+
+**健康级别**：
+- 80-100 `healthy`：接受所有任务
+- 60-79 `degraded`：仅接受低优先级
+- 40-59 `warning`：不接受新任务
+- 0-39 `critical`：触发熔断
+
+---
+
+### `result_pipeline.py` — Result Aggregation Pipeline
+
+**职责**：5 阶段结果聚合流水线。
+
+```
+Collect → Filter → Transform → Aggregate → Export
+```
+
+| 阶段 | 作用 |
+|------|------|
+| Collect | 扫描 results/ 匹配标签 |
+| Filter | 移除 failed/timeout |
+| Transform | 提取 output 字段 |
+| Aggregate | 合并为统一输出 |
+| Export | 写入 pipelines/ 目录 |
+
+**快速使用**：
+```python
+from result_pipeline import quick_aggregate
+result = quick_aggregate(["research", "write"], timeout=60)
 ```

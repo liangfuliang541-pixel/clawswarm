@@ -125,6 +125,8 @@ mcporter call clawswarm.clawswarm_spawn prompt="\u641c\u7d22 AI \u6700\u65b0\u8f
 | `clawswarm_status` | \u96c6\u7fa4\u6574\u4f53\u72b6\u6001 | \u65e0 |
 | `clawswarm_nodes` | \u8282\u70b9\u5217\u8868 | \u65e0 |
 | `clawswarm_aggregate` | \u805a\u5408\u591a\u4e2a\u7ed3\u679c | labels[] |
+| `clawswarm_dead_letter` | 死信队列管理 (list/retry/purge/stats) | action?, entry_id?, reason?, limit? |
+| `clawswarm_health` | 节点健康评分 (0-100, 四级熔断) | node_id?, cpu?, memory?, successful_tasks?, failed_tasks? |
 
 ---
 
