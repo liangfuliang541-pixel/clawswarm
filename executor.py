@@ -311,9 +311,12 @@ class TaskExecutor:
         url = task.get("url")
         prompt = task.get("prompt", task.get("description", ""))
 
-        # 如果没给 url 但有 prompt，尝试用 prompt 当 url
+        # 如果没给 url 但有 prompt，从 prompt 中提取 URL
         if not url and prompt:
-            url = prompt.strip()
+            import re
+            # 提取第一个 http(s):// URL
+            m = re.search(r'https?://[^\s\'"<>]+', prompt)
+            url = m.group(0) if m else prompt.strip()
 
         if not url:
             raise ValueError("URL is required for fetch mode")

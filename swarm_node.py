@@ -275,7 +275,7 @@ def execute_task(task, node_id):
             "prompt":   prompt,
             "type":     task_type,
             "node_id":  node_id,
-            "url":      meta.get("url") or (prompt if exec_mode == "fetch" else None),
+            "url":      meta.get("url"),  # _execute_fetch 会从 prompt 中提取 URL
             "command":  meta.get("command") or task.get("command"),
             "code":     meta.get("code") or task.get("code"),
             "timeout":  task.get("timeout_seconds", 300),
