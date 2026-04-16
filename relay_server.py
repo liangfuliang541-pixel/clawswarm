@@ -17,12 +17,16 @@ Endpoints:
     GET  /health                         - 健康检查
     POST /register                       - 节点注册 (payload: JSON)
     GET  /nodes                          - 列出所有节点
+    GET  /agents                         - 列出所有注册的 agent（简化视图）
     GET  /discover/{node_id}             - 获取节点连接信息
     POST /unregister/{node_id}           - 注销节点
     POST /cmd/{node_id}                  - 发送命令给节点 (payload: text)
     GET  /poll/{node_id}                 - 节点获取待执行命令
     POST /done/{node_id}                 - 节点提交执行结果 (payload: text)
     GET  /result/{node_id}               - 获取节点执行结果
+    GET  /inbox/{agent_id}               - 取走所有消息（原子操作）
+    GET  /inbox/{agent_id}/peek           - 瞄一眼收件箱，不删除
+    POST /msg/{from_agent}/{to_agent}    - 发送消息给另一个龙虾
     GET  /pairing/generate               - 生成配对码
     POST /pairing/connect/{code}         - 使用配对码连接
     GET  /pairing/status/{code}          - 查看配对状态
@@ -55,6 +59,8 @@ DATA_DIR.mkdir(exist_ok=True)
 QUEUE_DIR.mkdir(exist_ok=True)
 RESULT_DIR.mkdir(exist_ok=True)
 PAIRING_DIR.mkdir(exist_ok=True)
+INBOX_DIR = DATA_DIR / "inbox"
+INBOX_DIR.mkdir(exist_ok=True)
 
 
 # ── 节点注册表 ─────────────────────────────────────────────────────────
@@ -238,6 +244,72 @@ class CommandQueue:
                 except Exception:
                     pass
             return None
+
+
+# ── 龙虾间消息收件箱 ─────────────────────────────────────────────────
+
+class MessageInbox:
+    """
+    简单的线程安全消息收件箱。
+    每个 agent 一个收件箱文件，消息以 JSON 数组存储。
+    GET /inbox/{agent_id} 会返回并清空所有消息（原子操作）。
+    """
+
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def _inbox_path(self, agent_id: str) -> Path:
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", agent_id)
+        return INBOX_DIR / f"{safe}.json"
+
+    def send(self, from_agent: str, to_agent: str, content: str, msg_type: str = "text") -> dict:
+        with self._lock:
+            path = self._inbox_path(to_agent)
+            messages = []
+            if path.exists():
+                try:
+                    messages = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    messages = []
+            msg_id = f"{int(time.time()*1000)}_{uuid.uuid4().hex[:8]}"
+            msg = {
+                "id": msg_id,
+                "from": from_agent,
+                "to": to_agent,
+                "type": msg_type,
+                "content": content,
+                "sent_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            messages.append(msg)
+            path.write_text(json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8")
+            METRICS["requests"] += 1
+            return msg
+
+    def fetch(self, agent_id: str) -> list:
+        with self._lock:
+            path = self._inbox_path(agent_id)
+            if not path.exists():
+                return []
+            try:
+                messages = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                return []
+            path.write_text("[]", encoding="utf-8")
+            METRICS["requests"] += 1
+            return messages
+
+    def peek(self, agent_id: str) -> list:
+        with self._lock:
+            path = self._inbox_path(agent_id)
+            if not path.exists():
+                return []
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                return []
+
+
+messages_inbox = MessageInbox()
 
 
 # ── 配对码系统 ──────────────────────────────────────────────────────────
@@ -454,6 +526,35 @@ class RelayHandler(BaseHTTPRequestHandler):
                 "nodes_registered": len(registry.list_all()),
             })
 
+        # GET /inbox/{agent_id} — 取走所有消息（原子操作）
+        m = re.match(r"^/inbox/(.+)$", path)
+        if m:
+            agent_id = m.group(1)
+            msgs = messages_inbox.fetch(agent_id)
+            return self._send_json(200, {"agent_id": agent_id, "messages": msgs, "count": len(msgs)})
+
+        # GET /inbox/{agent_id}/peek — 瞄一眼，不删除
+        m = re.match(r"^/inbox/(.+)/peek$", path)
+        if m:
+            agent_id = m.group(1)
+            msgs = messages_inbox.peek(agent_id)
+            return self._send_json(200, {"agent_id": agent_id, "messages": msgs, "count": len(msgs)})
+
+        # GET /agents — 列出所有注册的 agent
+        if path == "/agents":
+            nodes = registry.list_all()
+            agents = [
+                {
+                    "agent_id": n["node_id"],
+                    "name": n.get("name", n["node_id"]),
+                    "status": n.get("status", "unknown"),
+                    "last_seen": n.get("last_seen", ""),
+                    "capabilities": n.get("capabilities", []),
+                }
+                for n in nodes
+            ]
+            return self._send_json(200, {"agents": agents, "count": len(agents)})
+
         self._send_json(404, {"error": "NOT_FOUND", "path": path})
 
     def do_POST(self):
@@ -537,6 +638,24 @@ class RelayHandler(BaseHTTPRequestHandler):
             if "error" in result:
                 return self._send_json(400, result)
             return self._send_json(200, result)
+
+        # POST /msg/{from_agent}/{to_agent} — 发送消息给另一个龙虾
+        m = re.match(r"^/msg/([^/]+)/([^/]+)$", path)
+        if m:
+            from_agent = m.group(1)
+            to_agent = m.group(2)
+            # 支持纯文本 body 或 JSON {"content": "...", "type": "..."}
+            content = body.strip()
+            msg_type = "text"
+            if body.startswith(b"{") or body.startswith(b"["):
+                try:
+                    d = json.loads(body)
+                    content = d.get("content", content)
+                    msg_type = d.get("type", "text")
+                except Exception:
+                    pass
+            msg = messages_inbox.send(from_agent, to_agent, content, msg_type)
+            return self._send_json(200, {"ok": True, "message": msg})
 
         self._send_json(404, {"error": "NOT_FOUND", "path": path})
 
