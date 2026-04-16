@@ -534,7 +534,7 @@ class RelayHandler(BaseHTTPRequestHandler):
             return self._send_json(200, {"agent_id": agent_id, "messages": msgs, "count": len(msgs)})
 
         # GET /inbox/{agent_id}/peek — 瞄一眼，不删除
-        m = re.match(r"^/inbox/(.+)/peek$", path)
+        m = re.match(r"^/inbox/([^/]+)/peek$", path)
         if m:
             agent_id = m.group(1)
             msgs = messages_inbox.peek(agent_id)
