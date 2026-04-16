@@ -12,8 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **`orchestrate.py`** (NEW): 统帅千军万马主入口脚本
-- **`demo.py`** (NEW): 交互演示脚本 — 4 个预设场景 + 自定义任务，完整结果显示
+- **`clawchat.py`** (NEW): Agent 间实时聊天模块 — SQLite 持久存储 + FastAPI HTTP API (port 5002) + WebSocket 实时推送 + RelayBridge 跨公网桥接
+- **`dashboard/index.html`**: 新增 ClawChat 抽屉面板（右下角聊天气泡按钮，点击展开，实时消息推送）
+- **`ops_manual.md`**: 全面重写 — 包含 Cloudflare Tunnel 安装步骤、ClawChat HTTP API、已知问题修复
+
+### Fixed
+- **`clawchat.py`**: `get_partners()` 在 `fetchall()` 后关闭连接导致循环中 `conn.execute()` 失败
+- **`clawchat.py`**: `ChatMessage` dataclass 缺少 `thread_id` 字段（write 工具丢失）
+- **`clawchat.py`**: `SELECT *` 导致列顺序不确定 → 改用显式字段列表
+- **`swarm_data/remote_nodes/kimi-claw-01.json`**: relay_url 更新为 Cloudflare Tunnel URL（`loved-able-techno-closely.trycloudflare.com`），serveo 作备用
 
 ### Fixed
 - **P0 `classify_task` 关键词匹配歧义**：修复 "write code" 被误判为 report 而非 code

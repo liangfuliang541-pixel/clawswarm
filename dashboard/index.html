@@ -227,6 +227,83 @@
     padding: 30px 10px;
   }
   .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+
+  /* ── Chat Drawer ── */
+  .chat-toggle {
+    position: fixed;
+    bottom: 16px;
+    right: 40px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 12px rgba(59,130,246,0.4);
+    z-index: 200;
+    transition: transform 0.15s;
+  }
+  .chat-toggle:hover { transform: scale(1.1); }
+  .chat-badge {
+    position: absolute; top: -4px; right: -4px;
+    min-width: 18px; height: 18px;
+    background: var(--red);
+    color: white; font-size: 10px; font-weight: 700;
+    border-radius: 9px; padding: 0 4px;
+    display: none; align-items: center; justify-content: center;
+  }
+  .chat-badge.show { display: flex; }
+
+  .chat-drawer {
+    position: fixed;
+    bottom: 0; right: 0;
+    width: 340px; height: 480px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px 12px 0 0;
+    display: flex; flex-direction: column;
+    z-index: 201;
+    transform: translateY(100%);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+  }
+  .chat-drawer.open { transform: translateY(0); }
+
+  .chat-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .chat-header .dot-online { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .chat-header .dot-offline { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+  .chat-close { margin-left: auto; font-size: 16px; opacity: 0.6; }
+
+  .chat-msgs {
+    flex: 1; overflow-y: auto; padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .chat-msg { max-width: 80%; padding: 7px 11px; border-radius: 10px; font-size: 12px; line-height: 1.4; }
+  .chat-msg.sent { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 3px; }
+  .chat-msg.rcvd { align-self: flex-start; background: var(--border); color: var(--text); border-bottom-left-radius: 3px; }
+  .chat-msg .sender { font-size: 10px; opacity: 0.65; margin-bottom: 2px; }
+  .chat-msg .ts { font-size: 9px; opacity: 0.5; margin-top: 2px; text-align: right; }
+  .chat-welcome { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 0; }
+
+  .chat-input-row { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  .chat-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: inherit; font-size: 12px; padding: 7px 10px;
+  }
+  .chat-input:focus { outline: none; border-color: var(--accent); }
+  .chat-send {
+    background: var(--accent); color: white; border: none; border-radius: 6px;
+    padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .chat-send:hover { opacity: 0.85; }
+  .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -299,6 +376,29 @@
 </div>
 
 <div class="conn-indicator" id="connIndicator" title="WebSocket connection"></div>
+
+<!-- Chat Drawer -->
+<div class="chat-drawer" id="chatDrawer">
+  <div class="chat-header" onclick="toggleChat()">
+    <span id="chatDot" class="dot-offline"></span>
+    <span>ClawChat</span>
+    <span id="chatPartner" style="font-weight:400;color:var(--muted);font-size:11px;">kimi-claw-01</span>
+    <span class="chat-close">&#x2715;</span>
+  </div>
+  <div class="chat-msgs" id="chatMsgs">
+    <div class="chat-welcome">Connecting to ClawChat...</div>
+  </div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chatInput" placeholder="Send a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMsg()}" disabled>
+    <button class="chat-send" id="chatSendBtn" onclick="sendChatMsg()" disabled>Send</button>
+  </div>
+</div>
+
+<!-- Chat Toggle Button -->
+<button class="chat-toggle" id="chatToggle" onclick="toggleChat()" title="ClawChat">
+  &#x1F4AC;
+  <span class="chat-badge" id="chatBadge">0</span>
+</button>
 
 <script>
 const WS_URL = "ws://localhost:5000/ws";
@@ -480,6 +580,156 @@ async function submitTask() {
 }
 
 connect();
+
+// ── ClawChat Integration ────────────────────────────────────────────────────
+const CHAT_BASE = "http://localhost:5002";
+const CHAT_WS   = "ws://localhost:5002/ws";
+const MY_AGENT  = "main-agent";
+const TARGET    = "kimi-claw-01";
+
+let chatWs      = null;
+let chatUnread  = 0;
+let chatOpen    = false;
+let chatConnected = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  document.getElementById("chatDrawer").classList.toggle("open", chatOpen);
+  if (chatOpen) {
+    chatUnread = 0;
+    document.getElementById("chatBadge").classList.remove("show");
+    document.getElementById("chatInput").focus();
+  }
+}
+
+function appendChatMsg(content, sent, sender, ts) {
+  const el = document.getElementById("chatMsgs");
+  // Remove welcome if present
+  const welcome = el.querySelector(".chat-welcome");
+  if (welcome) welcome.remove();
+
+  const div = document.createElement("div");
+  div.className = "chat-msg " + (sent ? "sent" : "rcvd");
+  const time = ts ? new Date(ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
+  div.innerHTML = `
+    ${sender ? `<div class="sender">${sender}</div>` : ""}
+    <div>${escapeHtml(content)}</div>
+    ${time ? `<div class="ts">${time}</div>` : ""}
+  `;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+async function sendChatMsg() {
+  const input = document.getElementById("chatInput");
+  const content = input.value.trim();
+  if (!content || !chatConnected) return;
+  input.value = "";
+  appendChatMsg(content, true, MY_AGENT, new Date().toISOString());
+  try {
+    const body = JSON.stringify({ content, type: "text" });
+    const r = await fetch(`${CHAT_BASE}/send/${MY_AGENT}/${TARGET}`, {
+      method: "POST", body,
+      headers: { "Content-Type": "application/json" }
+    });
+    if (!r.ok) console.warn("send failed", r.status);
+  } catch(e) {
+    console.warn("send error", e);
+  }
+}
+
+async function loadChatHistory() {
+  try {
+    const r = await fetch(`${CHAT_BASE}/conversation/${MY_AGENT}/${TARGET}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const msgs = data.messages || [];
+    if (!msgs.length) {
+      document.getElementById("chatMsgs").innerHTML =
+        '<div class="chat-welcome">No messages yet. Say hello! &#x1F98A;</div>';
+      return;
+    }
+    document.getElementById("chatMsgs").innerHTML = "";
+    for (const m of msgs) {
+      const sent = m.from_agent === MY_AGENT;
+      appendChatMsg(m.content, sent, m.from_agent, m.created_at);
+    }
+  } catch(e) {
+    document.getElementById("chatMsgs").innerHTML =
+      '<div class="chat-welcome">&#x26A0; Cannot reach ClawChat server<br><small>Is clawchat.py running on port 5002?</small></div>';
+  }
+}
+
+function connectChat() {
+  try {
+    chatWs = new WebSocket(CHAT_WS);
+  } catch(e) {
+    // WebSocket not available, fall back to polling
+    setInterval(pollChat, 8000);
+    return;
+  }
+
+  chatWs.onopen = () => {
+    chatConnected = true;
+    document.getElementById("chatDot").className = "dot-online";
+    document.getElementById("chatInput").disabled = false;
+    document.getElementById("chatSendBtn").disabled = false;
+    loadChatHistory();
+  };
+  chatWs.onclose = chatWs.onerror = () => {
+    chatConnected = false;
+    document.getElementById("chatDot").className = "dot-offline";
+    document.getElementById("chatInput").disabled = true;
+    document.getElementById("chatSendBtn").disabled = true;
+    // Reconnect after 5s
+    setTimeout(connectChat, 5000);
+  };
+  chatWs.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      // Only handle direct messages to us
+      if (msg.from_agent && msg.to_agent === MY_AGENT) {
+        appendChatMsg(msg.content || msg.text || "", false, msg.from_agent, msg.created_at);
+        if (!chatOpen) {
+          chatUnread++;
+          const badge = document.getElementById("chatBadge");
+          badge.textContent = chatUnread;
+          badge.classList.add("show");
+        }
+      }
+    } catch(err) {}
+  };
+}
+
+// Fallback polling if WebSocket fails
+async function pollChat() {
+  if (!chatConnected) return;
+  try {
+    const r = await fetch(`${CHAT_BASE}/inbox/${MY_AGENT}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const newMsgs = data.messages || [];
+    for (const m of newMsgs) {
+      if (m.status !== "read") {
+        appendChatMsg(m.content || m.text || "", false, m.from_agent, m.created_at);
+        if (!chatOpen) {
+          chatUnread++;
+          const badge = document.getElementById("chatBadge");
+          badge.textContent = chatUnread;
+          badge.classList.add("show");
+        }
+      }
+    }
+  } catch(e) {}
+}
+
+connectChat();
 </script>
 </body>
 </html>
