@@ -29,6 +29,7 @@ webhook.py                  # Webhook 发送器
 node_api.py                 # 节点 HTTP API（:5171）
 master_api.py               # 主节点 HTTP API（:5000）
 mcp_server.py               # MCP Server：6 tools（spawn/poll/submit/status/nodes/aggregate）
+clawchat.py                 # Agent 间聊天：SQLite + HTTP API + WebSocket（port 5002）
 dashboard/
 ├── dashboard.py            # Web UI 监控面板（FastAPI + WebSocket）
 └── __init__.py
@@ -412,6 +413,48 @@ mcporter call clawswarm.clawswarm_submit prompt="task" priority=8
 - 选择 stdio 而非 HTTP，因为 MCP stdio 是最通用的传输方式
 - 不依赖外部包（纯 Python 标准库 + json）
 - 无 API Key 时优雅降级，返回 demo 数据
+
+---
+
+### `clawchat.py` — Agent 间实时聊天 💬
+
+**职责**：ClawSwarm 集群中不同 Agent 之间的持久化消息系统，支持跨公网 WebSocket 桥接。
+
+**技术栈**：SQLite + FastAPI + WebSocket + RelayBridge
+
+**组件**：
+- `ChatStore` — SQLite 消息持久化（inbox / conversation / search）
+- `RelayBridge` — 跨公网 WebSocket 桥接（代理消息到 relay）
+- `ClawChatServer` — HTTP + WebSocket 服务器（port 5002）
+- `ClawChatClient` — 轻量客户端封装
+
+**HTTP API**（port 5002）：
+
+| 端点 | 方法 | 作用 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/inbox/{agent_id}` | GET | 收件箱 |
+| `/conversation/{a}/{b}` | GET | 双人聊天记录 |
+| `/partners/{agent_id}` | GET | 所有对话对象 |
+| `/send/{from}/{to}` | POST | 发送消息 |
+| `/ws/{agent_id}` | WS | WebSocket 实时推送 |
+
+**用法示例**：
+```python
+from clawchat import ChatStore, ClawChatClient
+
+# 收件箱
+store = ChatStore()
+msgs = store.get_inbox("main-agent")
+for m in msgs:
+    print(f"{m.from_agent}: {m.content}")
+
+# HTTP API 发送
+client = ClawChatClient(base_url="http://localhost:5002", agent_id="main-agent")
+client.send("kimi-claw-01", "Hello from the main agent!")
+```
+
+**Dashboard 集成**：dashboard/index.html 右下角有内置聊天面板，连接 ClawChatServer，实时收发消息。
 
 ---
 

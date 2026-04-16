@@ -45,7 +45,7 @@ check_dependencies() {
 }
 
 check_optional() {
-    OPTIONAL=("websockets" "opentelemetry-api" "opentelemetry-sdk" "opentelemetry-exporter-otlp" "fastapi" "uvicorn")
+    OPTIONAL=("websockets" "opentelemetry-api" "opentelemetry-sdk" "opentelemetry-exporter-otlp" "fastapi" "uvicorn" "pydantic" "starlette")
     MISSING_OPTIONAL=()
     for pkg in "${OPTIONAL[@]}"; do
         if ! python3 -c "import ${pkg//-/_}" 2>/dev/null; then
@@ -95,6 +95,25 @@ start_local() {
         warn "WebSocket not available, skipping event server"
     fi
 
+    # 启动 Dashboard Web UI（后台）
+    if python3 -c "import fastapi" 2>/dev/null; then
+        log "Starting Dashboard on :5000..."
+        python3 -c "
+import uvicorn, sys
+sys.path.insert(0, '.')
+from dashboard.dashboard import app
+uvicorn.run(app, host='0.0.0.0', port=5000, log_level='warning')
+" &
+        DASH_PID=$!
+    fi
+
+    # 启动 ClawChat（后台）
+    if python3 -c "import fastapi" 2>/dev/null; then
+        log "Starting ClawChat on :5002..."
+        python3 clawchat.py --port 5002 --agent main-agent &
+        CHAT_PID=$!
+    fi
+
     # 启动节点（后台）
     log "Starting Node Alpha..."
     python3 node_api.py claw_alpha search write code &
@@ -106,12 +125,15 @@ start_local() {
     BETA_PID=$!
 
     log "All services started."
-    log "Master API:  http://localhost:5000"
-    log "Master API docs: http://localhost:5000/docs"
+    log "Dashboard:   http://localhost:5000"
+    log "ClawChat:    http://localhost:5002"
+    log "Event WS:    ws://localhost:8765"
+    log "Node Alpha:  http://localhost:5171"
+    log "Node Beta:   http://localhost:5172"
     echo ""
-    log "PIDs: master=$MASTER_PID events=$EVENTS_PID alpha=$ALPHA_PID beta=$BETA_PID"
+    log "PIDs: master=$MASTER_PID events=$EVENTS_PID dash=$DASH_PID chat=$CHAT_PID alpha=$ALPHA_PID beta=$BETA_PID"
     echo ""
-    log "Stop all: kill $MASTER_PID $EVENTS_PID $ALPHA_PID $BETA_PID 2>/dev/null"
+    log "Stop all: kill $MASTER_PID $EVENTS_PID $DASH_PID $CHAT_PID $ALPHA_PID $BETA_PID 2>/dev/null"
 }
 
 start_docker() {
@@ -137,7 +159,8 @@ start_docker() {
     docker compose ps
 
     echo ""
-    log "Master API:  http://localhost:5000"
+    log "Dashboard:   http://localhost:5000"
+    log "ClawChat:    http://localhost:5002"
     log "Event WS:    ws://localhost:8765"
     log "Node Alpha:  http://localhost:5171"
     log "Node Beta:   http://localhost:5172"

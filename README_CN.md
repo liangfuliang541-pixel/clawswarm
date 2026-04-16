@@ -1,11 +1,11 @@
 # 🦞 ClawSwarm - 多智能体协同框架
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.9.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.10.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
-  <img src="https://img.shields.io/badge/tests-107%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-108%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
-  <img src="https://img.shields.io/badge/MCP-2024--11--05-purple" alt="MCP">
+  <img src="https://img.shields.io/badge/LOC-18.7k-blueviolet" alt="LOC">
 </p>
 
 <div align="center">
@@ -47,7 +47,8 @@
 - 🧠 **能力感知调度** — 根据节点能力智能分配任务
 - 🔀 **DAG 工作流** — 构建依赖图，最大化并行执行
 - 🤖 **MCP Server** — 将 ClawSwarm 暴露为 MCP 工具供其他 Agent 调用
-- 🖥️ **Web 监控面板** — WebSocket 实时推送，监控集群状态
+- 💬 **ClawChat** — Agent 间实时聊天，SQLite 持久存储 + WebSocket 推送
+- 🖥️ **Web 监控面板** — WebSocket 实时推送，监控集群状态，内置聊天面板
 - 📊 **OpenTelemetry** — 开箱即用的生产级可观测性
 - 🔒 **沙箱安全** — 路径白名单、命令黑名单、审计日志
 - ✅ **人工审批点** — 关键任务支持 HITL 人工确认

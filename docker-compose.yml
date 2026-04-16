@@ -77,6 +77,25 @@ services:
       - master
     command: ["python", "node_api.py", "claw_alpha", "search", "write", "code", "read"]
 
+  # ── ClawChat Server (Agent 间聊天) ────────────────────────────────────
+  clawchat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clawswarm-clawchat
+    ports:
+      - "5002:5002"   # ClawChat HTTP + WebSocket
+    environment:
+      - CLAWSWARM_BASE_DIR=/data/swarm
+      - CLAWSWARM_ENV=production
+    volumes:
+      - swarm-data:/data/swarm
+    networks:
+      - clawswarm-net
+    depends_on:
+      - master
+    command: ["python", "clawchat.py", "--port", "5002"]
+
   # ── Node Beta (分析+报告节点) ───────────────────────────────────────────
   node-beta:
     build:

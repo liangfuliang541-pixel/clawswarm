@@ -44,11 +44,12 @@ ENV CLAWSWARM_OTEL_ENABLED=false
 RUN mkdir -p $CLAWSWARM_BASE_DIR/{queue,in_progress,results,agents,memory,logs,checkpoint}
 
 # Expose ports
-# 5000 - Master API
+# 5000 - Master API / Dashboard
+# 5002 - ClawChat Server
 # 5171 - Node API (base port, +1 per additional node)
 # 8765 - WebSocket Event Server
 
-EXPOSE 5000 5171 5172 5173 8765
+EXPOSE 5000 5002 5171 5172 5173 8765
 
 # Default command: start master API
 CMD ["python", "master_api.py"]

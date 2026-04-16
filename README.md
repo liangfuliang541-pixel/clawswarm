@@ -1,11 +1,11 @@
 # 🦞 ClawSwarm - Multi-Agent Orchestration Framework
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.9.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.10.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
-  <img src="https://img.shields.io/badge/tests-107%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-108%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
-  <img src="https://img.shields.io/badge/MCP-2024--11--05-purple" alt="MCP">
+  <img src="https://img.shields.io/badge/LOC-18.7k-blueviolet" alt="LOC">
 </p>
 
 <div align="center">
@@ -48,7 +48,8 @@
 - 🧠 **Capability-Aware Scheduling** — Tasks routed to agents based on their capabilities
 - 🔀 **DAG Workflows** — Build dependency graphs, execute in parallel where possible
 - 🤖 **MCP Server** — Expose ClawSwarm as MCP tools for other agents to call
-- 🖥️ **Web Dashboard** — Real-time monitoring with WebSocket event streaming
+- 💬 **ClawChat** — Agent-to-agent real-time messaging with SQLite persistence and WebSocket streaming
+- 🖥️ **Web Dashboard** — Real-time monitoring with WebSocket event streaming + built-in chat panel
 - 📊 **OpenTelemetry** — Production-grade observability out of the box
 - 🔒 **Sandbox Security** — Path whitelisting, command blacklisting, audit logging
 - ✅ **HITL Checkpoint** — Human-in-the-loop approval for critical tasks
