@@ -193,6 +193,90 @@ class RemoteRelay:
             "pending_command": cursor,
         }
 
+    # ── 节点注册与发现（Relay 新端点）────────────────────────────────
+
+    def register(
+        self,
+        node_id: str,
+        gateway_url: str,
+        token: str,
+        capabilities: List[str],
+        name: str = None,
+    ) -> Dict[str, Any]:
+        """
+        向 Relay Server 注册本节点
+
+        Args:
+            node_id: 节点唯一ID
+            gateway_url: 节点 gateway URL
+            token: 认证 token
+            capabilities: 节点能力列表
+            name: 显示名称
+
+        Returns:
+            dict: 注册结果（Relay 返回，不含 token）
+        """
+        payload = {
+            "node_id": node_id,
+            "gateway_url": gateway_url,
+            "token": token,
+            "capabilities": capabilities,
+        }
+        if name:
+            payload["name"] = name
+
+        url = f"{self.relay_url}/register"
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                return result
+        except urllib.error.HTTPError as e:
+            raise RelayError(f"HTTP {e.code}: {e.read().decode('utf-8')}")
+        except urllib.error.URLError as e:
+            raise RelayError(f"Connection failed: {e.reason}")
+
+    def heartbeat(self, node_id: str) -> bool:
+        """
+        向 Relay Server 发送心跳
+
+        Args:
+            node_id: 节点ID
+
+        Returns:
+            bool: 是否成功
+        """
+        url = f"{self.relay_url}/heartbeat/{node_id}"
+        try:
+            req = urllib.request.Request(url, data=b"{}", method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                return result.get("status") == "ok"
+        except Exception:
+            return False
+
+    def discover(self) -> List[Dict[str, Any]]:
+        """
+        从 Relay 发现所有已注册的节点
+
+        Returns:
+            list: 节点列表（不含 token）
+        """
+        url = f"{self.relay_url}/nodes"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                nodes = result.get("nodes", [])
+                # 剔除 token 字段
+                return [{k: v for k, v in n.items() if k != "token"} for n in nodes]
+        except urllib.error.HTTPError as e:
+            raise RelayError(f"HTTP {e.code}: {e.reason}")
+        except urllib.error.URLError as e:
+            raise RelayError(f"Connection failed: {e.reason}")
+
 
 # ── 远程节点 ────────────────────────────────────────────────────────────
 
@@ -610,33 +694,417 @@ def quick_exec(relay_url: str, command: str, wait: bool = True) -> Dict[str, Any
 
 # ── 测试 ────────────────────────────────────────────────────────────────
 
+# ── 增强: 兼容新版 relay_server.py 的高级客户端 ──────────────────────────
+
+import threading
+import socket
+import urllib.request
+import urllib.error
+
+
+class RelayClient:
+    """
+    高级 Relay 客户端：自动注册 + 心跳保活 + 节点发现 + 任务调度。
+    
+    与 relay_server.py 配合使用，提供完整的节点生命周期管理。
+    
+    用法:
+        client = RelayClient(
+            relay_url="http://localhost:18080",
+            node_id="my-claw",
+            gateway_url="http://localhost:28789",
+            token="your-gateway-token",
+            capabilities=["shell", "code", "search"],
+        )
+        client.register()
+        client.start_heartbeat(interval=30)
+        
+        # 发现集群节点
+        nodes = client.discover_nodes()
+        for n in nodes:
+            print(f"  {n['node_id']}: {n['capabilities']}")
+        
+        # 在远程节点执行任务
+        result = client.exec_on_node("kimi-claw-01", "echo hello from claw!")
+        print(result)
+        
+        # 停止
+        client.stop()
+    """
+
+    def __init__(
+        self,
+        relay_url: str,
+        node_id: str,
+        gateway_url: str,
+        token: str,
+        capabilities: list,
+        name: str = None,
+    ):
+        self.relay_url = relay_url.rstrip("/")
+        self.node_id = node_id
+        self.gateway_url = gateway_url
+        self.token = token
+        self.capabilities = capabilities
+        self.name = name or node_id
+        
+        self._heartbeat_thread: threading.Thread = None
+        self._heartbeat_interval = 30
+        self._stop_event = threading.Event()
+        self._lock = threading.Lock()
+
+    # ── 底层 HTTP ───────────────────────────────────────────────────────
+
+    def _post_json(self, path: str, data: dict = None) -> dict:
+        url = f"{self.relay_url}{path}"
+        body = json.dumps(data or {}, ensure_ascii=False).encode("utf-8") if data else b""
+        try:
+            req = urllib.request.Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json; charset=utf-8")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                err = json.loads(e.read().decode("utf-8"))
+                return err
+            except Exception:
+                return {"error": f"HTTP {e.code}", "message": str(e)}
+        except Exception as e:
+            return {"error": "CONNECTION_FAILED", "message": str(e)}
+
+    def _get_json(self, path: str) -> dict:
+        url = f"{self.relay_url}{path}"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                err = json.loads(e.read().decode("utf-8"))
+                return err
+            except Exception:
+                return {"error": f"HTTP {e.code}"}
+        except Exception as e:
+            return {"error": "CONNECTION_FAILED", "message": str(e)}
+
+    def _get_text(self, path: str) -> str:
+        url = f"{self.relay_url}{path}"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                return resp.read().decode("utf-8")
+        except Exception:
+            return ""
+
+    def _post_text(self, path: str, data: str) -> str:
+        url = f"{self.relay_url}{path}"
+        body = data.encode("utf-8")
+        try:
+            req = urllib.request.Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "text/plain")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.read().decode("utf-8")
+        except Exception as e:
+            return str(e)
+
+    # ── 节点注册 ────────────────────────────────────────────────────────
+
+    def register(self) -> dict:
+        """
+        向 Relay Server 注册本节点。
+        注册后其他节点可以发现本节点。
+        """
+        result = self._post_json("/register", {
+            "node_id": self.node_id,
+            "name": self.name,
+            "gateway_url": self.gateway_url,
+            "token": self.token,
+            "capabilities": self.capabilities,
+        })
+        if "error" not in result:
+            print(f"[RelayClient] 已注册到 {self.relay_url}，节点: {self.node_id}")
+        else:
+            print(f"[RelayClient] 注册失败: {result}")
+        return result
+
+    def unregister(self) -> dict:
+        """注销本节点"""
+        return self._post_json(f"/unregister/{self.node_id}")
+
+    def heartbeat(self) -> bool:
+        """发送心跳，返回是否成功"""
+        result = self._post_json(f"/heartbeat/{self.node_id}")
+        return "error" not in result
+
+    # ── 心跳后台线程 ──────────────────────────────────────────────────
+
+    def start_heartbeat(self, interval: int = 30) -> None:
+        """启动后台心跳线程（自动重连）"""
+        self._heartbeat_interval = interval
+        self._stop_event.clear()
+        
+        def run():
+            consecutive_failures = 0
+            while not self._stop_event.wait(interval):
+                try:
+                    ok = self.heartbeat()
+                    if ok:
+                        consecutive_failures = 0
+                    else:
+                        consecutive_failures += 1
+                        if consecutive_failures >= 3:
+                            # 连续失败，尝试重新注册
+                            print(f"[RelayClient] 心跳连续失败，尝试重新注册...")
+                            self.register()
+                            consecutive_failures = 0
+                except Exception as e:
+                    consecutive_failures += 1
+                    if consecutive_failures >= 3:
+                        print(f"[RelayClient] 心跳异常: {e}，尝试重新注册...")
+                        self.register()
+                        consecutive_failures = 0
+        
+        t = threading.Thread(target=run, daemon=True, name=f"heartbeat-{self.node_id}")
+        t.start()
+        self._heartbeat_thread = t
+        print(f"[RelayClient] 心跳线程启动，间隔 {interval}s")
+
+    def stop_heartbeat(self) -> None:
+        """停止心跳"""
+        self._stop_event.set()
+        if self._heartbeat_thread:
+            self._heartbeat_thread.join(timeout=2)
+            self._heartbeat_thread = None
+
+    # ── 节点发现 ──────────────────────────────────────────────────────
+
+    def discover_nodes(self) -> list:
+        """
+        从 Relay 发现所有已注册节点（不含自己）。
+        返回: [{node_id, name, gateway_url, capabilities, status}, ...]
+        """
+        result = self._get_json("/nodes")
+        nodes = result.get("nodes", [])
+        # 过滤掉自己
+        return [n for n in nodes if n.get("node_id") != self.node_id]
+
+    def get_online_nodes(self) -> list:
+        """获取所有在线节点（status=online）"""
+        nodes = self.discover_nodes()
+        return [n for n in nodes if n.get("status") == "online"]
+
+    def get_node(self, node_id: str) -> Optional[dict]:
+        """获取指定节点信息"""
+        result = self._get_json(f"/discover/{node_id}")
+        return result.get("node")
+
+    def get_best_node_for_task(self, task_type: str) -> Optional[dict]:
+        """
+        根据任务类型找到最优节点。
+        使用 paths.py 的能力映射进行匹配。
+        """
+        from paths import required_capabilities, can_node_handle, find_best_node
+        online = self.get_online_nodes()
+        if not online:
+            return None
+        return find_best_node(task_type, online)
+
+    # ── 远程执行 ───────────────────────────────────────────────────────
+
+    def exec_on_node(
+        self,
+        target_node_id: str,
+        command: str,
+        timeout: int = 60,
+        cwd: str = "/root",
+    ) -> dict:
+        """
+        在指定远程节点执行命令（通过 relay 中转）。
+        
+        流程：POST /cmd/{node_id} → 节点 poll → 执行 → done → 本机 get_result
+        """
+        # 1. 发送命令
+        wrapped = f'cd {cwd} && {command}'
+        resp = self._post_json(f"/cmd/{target_node_id}", {
+            "command": wrapped,
+            "timeout": timeout,
+        })
+        
+        if "error" in resp and "NODE_NOT_FOUND" not in str(resp):
+            return {"status": "error", "output": str(resp), "node_id": target_node_id}
+        
+        # 2. 等待结果
+        deadline = time.time() + timeout
+        poll_interval = 1.0
+        
+        while time.time() < deadline:
+            result_data = self._get_json(f"/result/{target_node_id}")
+            if result_data and "result" in result_data:
+                return {
+                    "status": result_data.get("status", "ok"),
+                    "output": result_data.get("result", ""),
+                    "node_id": target_node_id,
+                }
+            time.sleep(poll_interval)
+        
+        return {
+            "status": "timeout",
+            "output": "",
+            "node_id": target_node_id,
+        }
+
+    def exec_task_async(
+        self,
+        target_node_id: str,
+        task_id: str,
+        prompt: str,
+        timeout: int = 120,
+    ) -> None:
+        """
+        异步执行远程任务，结果写入 RESULTS_DIR。
+        供 orchestrator ResultWatcher 捕获。
+        """
+        def _run():
+            try:
+                from paths import RESULTS_DIR
+                import os
+                # 包装命令
+                escaped = prompt.replace('"', '\\"')
+                cmd = f'bash -c "{escaped}"'
+                result = self.exec_on_node(target_node_id, cmd, timeout=timeout)
+                
+                result_file = os.path.join(RESULTS_DIR, f"r_{task_id}.json")
+                output_data = {
+                    "task_id": task_id,
+                    "status": result.get("status", "done"),
+                    "result": result.get("output", ""),
+                    "node_type": "remote",
+                    "node_id": target_node_id,
+                }
+                with open(result_file, "w", encoding="utf-8") as f:
+                    json.dump(output_data, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"[RelayClient] exec_task_async 失败: {e}")
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+    # ── 兼容旧协议 ─────────────────────────────────────────────────────
+
+    def ping(self) -> bool:
+        """测试 relay 连通性"""
+        try:
+            r = self._get_json("/health")
+            return r.get("status") == "ok"
+        except Exception:
+            return False
+
+    def get_status(self) -> dict:
+        """获取 relay 服务状态"""
+        return self._get_json("/health")
+
+    def exec_raw(self, command: str, wait: bool = True, timeout: int = 60) -> dict:
+        """兼容旧接口：通过 relay 执行原始命令（自己执行）"""
+        return self.exec_on_node(self.node_id, command, timeout=timeout, cwd="/root")
+
+    # ── 生命周期 ───────────────────────────────────────────────────────
+
+    def stop(self) -> None:
+        """停止所有后台活动"""
+        self.stop_heartbeat()
+        self.unregister()
+        print(f"[RelayClient] 已停止: {self.node_id}")
+
+
+# ── 一键启动本地节点的便捷函数 ─────────────────────────────────────────
+
+def auto_start_local(
+    relay_url: str = None,
+    node_id: str = None,
+    gateway_url: str = "http://localhost:28789",
+    token: str = None,
+    capabilities: list = None,
+) -> RelayClient:
+    """
+    自动从环境变量/配置文件加载配置并启动本地节点。
+    
+    自动探测：
+    - CLAWSWARM_RELAY_URL → relay_url
+    - CLAWSWARM_NODE_ID → node_id  
+    - CLAWSWARM_GATEWAY_URL → gateway_url
+    - CLAWSWARM_GATEWAY_TOKEN → token
+    - CLAWSWARM_CAPABILITIES → capabilities (逗号分隔)
+    """
+    import os
+    
+    relay_url = relay_url or os.environ.get("CLAWSWARM_RELAY_URL", "")
+    node_id = node_id or os.environ.get("CLAWSWARM_NODE_ID", "local-agent")
+    token = token or os.environ.get("CLAWSWARM_GATEWAY_TOKEN", "")
+    capabilities = capabilities or os.environ.get("CLAWSWARM_CAPABILITIES", "read,write,code,search").split(",")
+
+    if not relay_url:
+        raise ValueError("relay_url 未设置，请设置 CLAWSWARM_RELAY_URL 环境变量")
+
+    client = RelayClient(
+        relay_url=relay_url,
+        node_id=node_id,
+        gateway_url=gateway_url,
+        token=token,
+        capabilities=[c.strip() for c in capabilities],
+    )
+    
+    result = client.register()
+    if "error" not in result:
+        client.start_heartbeat(interval=30)
+    
+    return client
+
+
 if __name__ == "__main__":
     print("=" * 50)
-    print("RemoteRelay 测试")
+    print("RelayClient 诊断工具")
     print("=" * 50)
-
-    # 读取本地配置（如果存在）
-    config_file = RELAY_CONFIG_DIR / "kimi-claw-01.json"
-    if config_file.exists():
-        config = json.loads(config_file.read_text(encoding="utf-8"))
-        relay_url = config["relay_url"]
-        node_id = config["node_id"]
-        print(f"找到已注册节点: {node_id}")
+    
+    import os
+    relay_url = os.environ.get("CLAWSWARM_RELAY_URL", "")
+    node_id = os.environ.get("CLAWSWARM_NODE_ID", "diagnostic-agent")
+    token = os.environ.get("CLAWSWARM_GATEWAY_TOKEN", "")
+    
+    if not relay_url:
+        print("⚠️  CLAWSWARM_RELAY_URL 未设置")
+        print()
+        # 尝试读 kimi-claw-01 配置
+        config_file = RELAY_CONFIG_DIR / "kimi-claw-01.json"
+        if config_file.exists():
+            config = json.loads(config_file.read_text(encoding="utf-8"))
+            relay_url = config.get("relay_url", "")
+            print(f"  从 kimi-claw-01.json 读取: {relay_url}")
+    
+    if relay_url:
+        client = RelayClient(
+            relay_url=relay_url,
+            node_id=node_id,
+            gateway_url="http://localhost:28789",
+            token=token,
+            capabilities=["diagnostic"],
+        )
+        
+        print(f"\n1. Relay 健康检查...")
+        print(f"   URL: {relay_url}")
+        print(f"   状态: {'✅ 在线' if client.ping() else '❌ 离线'}")
+        
+        print(f"\n2. 服务指标...")
+        status = client.get_status()
+        for k, v in status.items():
+            print(f"   {k}: {v}")
+        
+        print(f"\n3. 已注册节点...")
+        nodes = client.discover_nodes()
+        for n in nodes:
+            print(f"   [{n.get('node_id')}] {n.get('name')} - {n.get('capabilities')}")
+        
+        print(f"\n4. 测试远程执行 (kimi-claw-01)...")
+        result = client.exec_on_node("kimi-claw-01", "echo 'hello from claw' && hostname && uptime", timeout=30)
+        print(f"   状态: {result.get('status')}")
+        print(f"   输出: {result.get('output', '')[:200]}")
     else:
-        print("未找到已注册节点，使用默认配置")
-        relay_url = "https://dd99b12fac29647c-82-157-104-41.serveousercontent.com"
-        node_id = "test-remote"
+        print("无法连接到 relay")
 
-    # 测试 relay
-    relay = RemoteRelay(relay_url)
-    print(f"\nRelay URL: {relay_url}")
-    print(f"连通性测试: {'✅' if relay.ping() else '❌'}")
-
-    # 测试执行
-    print("\n执行测试命令...")
-    result = relay.exec("echo 'Hello from Remote!' && date && hostname && uname -a | head -1")
-    print(f"状态: {result['status']}")
-    print(f"耗时: {result['elapsed']}s")
-    print(f"输出:\n{result['output']}")
-
-    print("\n测试完成!")

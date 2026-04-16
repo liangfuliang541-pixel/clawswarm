@@ -43,6 +43,42 @@ except ImportError:
     HAS_CLAWSWARM = False
     print("[Dashboard] ClawSwarm modules not found, running in demo mode")
 
+# ── Relay 客户端 ───────────────────────────────────────────────────────
+RELAY_URL = os.environ.get("RELAY_URL", "http://localhost:18080")
+RELAY_NODE_ID = os.environ.get("RELAY_NODE_ID", "dashboard")
+RELAY_TOKEN = os.environ.get("RELAY_TOKEN", "dashboard-token")
+HAS_RELAY = False
+
+try:
+    from relay_client import RelayClient, RemoteNodeManager
+    _relay_client = None  # lazy init
+    _node_manager = None
+    HAS_RELAY = True
+    print(f"[Dashboard] Relay 客户端已加载，relay: {RELAY_URL}")
+except ImportError:
+    HAS_RELAY = False
+    print("[Dashboard] Relay 客户端未找到，节点管理功能不可用")
+
+def get_relay_client():
+    """懒加载 RelayClient 单例"""
+    global _relay_client
+    if _relay_client is None and HAS_RELAY:
+        _relay_client = RelayClient(
+            relay_url=RELAY_URL,
+            node_id=RELAY_NODE_ID,
+            gateway_url="http://localhost:28789",
+            token=RELAY_TOKEN,
+            capabilities=["dashboard", "monitor"],
+        )
+    return _relay_client
+
+def get_node_manager():
+    """懒加载 RemoteNodeManager 单例"""
+    global _node_manager
+    if _node_manager is None and HAS_RELAY:
+        _node_manager = RemoteNodeManager()
+    return _node_manager
+
 
 # ── Lifespan（必须放在 app = FastAPI 之前）──────────────────────────────
 
@@ -311,6 +347,128 @@ async def get_events(limit: int = Query(100, ge=1, le=500)):
     """获取事件日志"""
     events = _event_log.get("events", [])
     return {"total": len(events), "events": events[-limit:]}
+
+
+# ── 节点管理 API ─────────────────────────────────────────────────────
+
+@app.get("/api/relay/status")
+async def get_relay_status():
+    """获取 Relay 服务状态"""
+    client = get_relay_client()
+    if not client:
+        return {"error": "Relay 客户端未初始化", "relay_url": RELAY_URL}
+    try:
+        status = client.get_status()
+        return {"relay_url": RELAY_URL, "relay_reachable": client.ping(), "status": status}
+    except Exception as e:
+        return {"error": str(e), "relay_url": RELAY_URL}
+
+
+@app.get("/api/nodes")
+async def get_remote_nodes():
+    """获取通过 Relay 注册的远程节点"""
+    client = get_relay_client()
+    if not client:
+        return {"nodes": [], "error": "Relay 客户端未初始化"}
+    try:
+        nodes = client.discover_nodes()
+        return {"nodes": nodes, "total": len(nodes)}
+    except Exception as e:
+        return {"nodes": [], "error": str(e)}
+
+
+@app.get("/api/nodes/{node_id}")
+async def get_remote_node(node_id: str):
+    """获取指定节点信息"""
+    client = get_relay_client()
+    if not client:
+        raise HTTPException(503, "Relay 客户端未初始化")
+    node = client.get_node(node_id)
+    if not node:
+        raise HTTPException(404, f"节点未找到: {node_id}")
+    return node
+
+
+@app.post("/api/cmd/{node_id}")
+async def exec_on_node(node_id: str, body: dict = None):
+    """在指定节点执行命令"""
+    client = get_relay_client()
+    if not client:
+        raise HTTPException(503, "Relay 客户端未初始化")
+    command = (body or {}).get("command", "")
+    if not command:
+        raise HTTPException(400, "command is required")
+    timeout = (body or {}).get("timeout", 60)
+    cwd = (body or {}).get("cwd", "/root")
+    try:
+        result = client.exec_on_node(node_id, command, timeout=timeout, cwd=cwd)
+        return result
+    except Exception as e:
+        return {"status": "error", "output": str(e), "node_id": node_id}
+
+
+@app.post("/api/pairing/generate")
+async def generate_pair_code():
+    """生成本机配对码（需要配置 relay）"""
+    client = get_relay_client()
+    if not client:
+        raise HTTPException(503, "Relay 客户端未初始化，请设置 RELAY_URL 环境变量")
+    try:
+        # 使用 ClawPairing 生成配对码
+        from pairing import ClawPairing
+        pairing = ClawPairing(
+            relay_url=RELAY_URL,
+            node_id=RELAY_NODE_ID,
+            gateway_url="http://localhost:28789",
+            token=RELAY_TOKEN,
+        )
+        code = pairing.generate_code()
+        return {"code": code, "relay_url": RELAY_URL}
+    except Exception as e:
+        raise HTTPException(500, f"配对码生成失败: {str(e)}")
+
+
+@app.post("/api/pairing/connect")
+async def connect_pair_code(body: dict):
+    """使用配对码连接到对方节点"""
+    code = (body or {}).get("code", "")
+    if not code:
+        raise HTTPException(400, "配对码不能为空")
+    client = get_relay_client()
+    if not client:
+        raise HTTPException(503, "Relay 客户端未初始化")
+    try:
+        from pairing import ClawPairing
+        pairing = ClawPairing(
+            relay_url=RELAY_URL,
+            node_id=RELAY_NODE_ID,
+            gateway_url="http://localhost:28789",
+            token=RELAY_TOKEN,
+        )
+        result = pairing.connect_with_code(code)
+        return result
+    except Exception as e:
+        raise HTTPException(500, f"连接失败: {str(e)}")
+
+
+@app.get("/api/pairing/status/{code}")
+async def get_pair_status(code: str):
+    """查询配对码状态"""
+    client = get_relay_client()
+    if not client:
+        raise HTTPException(503, "Relay 客户端未初始化")
+    try:
+        from pairing import ClawPairing
+        pairing = ClawPairing(
+            relay_url=RELAY_URL,
+            node_id=RELAY_NODE_ID,
+            gateway_url="http://localhost:28789",
+            token=RELAY_TOKEN,
+        )
+        status = pairing.get_connection_status(code)
+        return status or {"status": "unknown"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 # ── Dashboard 任务执行 ──────────────────────────────────────────────
