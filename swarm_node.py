@@ -143,6 +143,10 @@ def poll_task(node_id, capabilities=None):
         if assigned_to is None and not can_node_handle(task_type, capabilities):
             continue  # 没能力处理，跳过
 
+        # 规则3：跳过无 id、无 type、无 prompt 的遗留任务（orchestrator 直写）
+        if not task_meta.get("id") and not task_meta.get("prompt"):
+            continue  # 孤儿任务，orchestrator 自己处理，跳过
+
         # 尝试原子 rename（抢占锁）
         try:
             os.replace(src, dst)

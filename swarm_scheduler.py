@@ -52,6 +52,26 @@ def create_task(prompt, task_type="general", priority=1, metadata=None, task_id=
     if task_id is None:
         task_id = f"t_{uuid.uuid4().hex[:12]}"
 
+    # ── spawn 类型任务不通过调度器，直接写队列让 orchestrator 处理 ──────────
+    if task_type == "spawn":
+        task = {
+            "id":           task_id,
+            "type":         task_type,
+            "description":  prompt,
+            "prompt":       prompt,
+            "priority":     priority,
+            "status":       "pending",
+            "assigned_to":  None,          # orchestrator 通过 spawn_manager 处理
+            "created_at":   datetime.now().isoformat(),
+            "retry_count":  0,
+            "max_retries":  3,
+            "timeout_seconds": TASK_TIMEOUT_SEC,
+            "metadata":     metadata or {}
+        }
+        write_json(os.path.join(QUEUE_DIR, f"{task_id}.json"), task)
+        log(f"[SCHED] {task_id} (spawn) -> queue (orchestrator handles)")
+        return task_id, task
+
     # 能力感知调度：自动选择最佳节点（本地+远程）
     online = get_online_nodes(STALE_THRESHOLD_SEC)
     best = find_best_node(task_type, online)
@@ -61,21 +81,20 @@ def create_task(prompt, task_type="general", priority=1, metadata=None, task_id=
         return create_task_for_remote_node(task_id, prompt, task_type, priority, best, metadata)
 
     task = {
-        "id":          task_id,
-        "type":        task_type,
-        "description": prompt,
-        "prompt":      prompt,
-        "priority":    priority,
-        "status":      "pending",
-        "assigned_to": best["node_id"] if best else None,
-        "created_at":  datetime.now().isoformat(),
-        "retry_count": 0,
-        "max_retries": 3,
+        "id":           task_id,
+        "type":         task_type,
+        "description":  prompt,
+        "prompt":       prompt,
+        "priority":     priority,
+        "status":       "pending",
+        "assigned_to":  best["node_id"] if best else None,
+        "created_at":   datetime.now().isoformat(),
+        "retry_count":  0,
+        "max_retries":  3,
         "timeout_seconds": TASK_TIMEOUT_SEC,
-        "metadata":    metadata or {}
+        "metadata":     metadata or {}
     }
-    fpath = os.path.join(QUEUE_DIR, f"{task_id}.json")
-    write_json(fpath, task)
+    write_json(os.path.join(QUEUE_DIR, f"{task_id}.json"), task)
 
     if best:
         log(f"[SCHED] {task_id} ({task_type}) -> {best['node_id']} "
@@ -249,7 +268,22 @@ def recover_stale_tasks():
         except Exception:
             continue
 
-        task_id    = task["id"]
+        task_id    = task.get("id") or task.get("task_id", "")
+        task_type_val = task.get("type") or task.get("task_type", "")
+        # 孤儿任务（无 id 且无 prompt）→ orchestrator 自己管理，直接标记失败
+        if not task_id and not task.get("prompt"):
+            dst = os.path.join(RESULTS_DIR, fname)
+            task["status"]    = "failed"
+            task["error"]    = f"Orphan task (no id/prompt): {reason}"
+            task["failed_at"] = datetime.now().isoformat()
+            write_json(dst, task)
+            os.remove(fpath)
+            log(f"[RECOVER] {fname} -> FAILED (orphan orchestrator task)")
+            recovered.append(fname)
+            continue
+
+        if not task_id:
+            continue
         runner     = task.get("runner", "unknown")
         started_at = task.get("started_at", task.get("created_at", ""))
         retry      = task.get("retry_count", 0)
@@ -274,6 +308,19 @@ def recover_stale_tasks():
             reason = f"timeout ({int(age_sec)}s > {TASK_TIMEOUT_SEC}s)"
 
         if not should_recover:
+            continue
+
+        # spawn 类型任务不重试，直接标记失败（由 orchestrator 处理）
+        task_type_val = task.get("type") or task.get("task_type", "")
+        if task_type_val == "spawn" or "spawn" in task_id.lower():
+            dst = os.path.join(RESULTS_DIR, fname)
+            task["status"] = "failed"
+            task["error"] = f"Spawn task timed out: {reason}"
+            task["failed_at"] = datetime.now().isoformat()
+            write_json(dst, task)
+            os.remove(fpath)
+            log(f"[RECOVER] {task_id} -> FAILED (spawn task, orchestrator handles)")
+            recovered.append(task_id)
             continue
 
         if retry + 1 >= max_ret:
@@ -338,7 +385,7 @@ def show_status():
                     age = f" ({int((datetime.now()-s).total_seconds())}s)"
                 except Exception:
                     pass
-            print(f"    [{t['id']}] runner={t.get('runner','?')} {t.get('description','')[:40]}{age}")
+            print(f"    [{t.get('id') or t.get('task_id','?')}] runner={t.get('runner','?')} {t.get('description','')[:40]}{age}")
     print()
 
 # ── 命令行入口 ────────────────────────────────────────────────────────────────
@@ -346,7 +393,7 @@ def show_status():
 def cmd_add(args_list):
     task_id, task = create_task(
         prompt=args_list[0] if args_list else "No prompt provided",
-        task_type=args.type or "general",
+        task_type=args.task_type or "general",
         priority=args.priority or 1
     )
     log(f"[ADD] Created task {task_id}: {task['description'][:60]}")
@@ -452,34 +499,35 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
 
-    # 简单参数解析
+    # 简单参数解析（避免 shadowing built-in 'type'）
     class Args:
         def __init__(self):
-            self.task_id = None
-            self.type    = None
-            self.priority = None
-            self._args   = sys.argv[2:]
+            self._args = sys.argv[2:]
 
-        def __getattr__(self, name):
-            if name == "task_id":
-                return self._args[1] if len(self._args) > 1 else None
-            if name == "type":
-                idx = None
-                for i, a in enumerate(self._args):
-                    if a == "--type" and i+1 < len(self._args):
-                        return self._args[i+1]
-                return None
-            if name == "priority":
-                for i, a in enumerate(self._args):
-                    if a == "--priority" and i+1 < len(self._args):
-                        return int(self._args[i+1])
-                return None
-            if name == "_args":
-                return []
-            raise AttributeError(name)
+        def _get_task_id(self):
+            return self._args[1] if len(self._args) > 1 else None
+
+        def _get_type(self):
+            for i, a in enumerate(self._args):
+                if a == "--type" and i+1 < len(self._args):
+                    return self._args[i+1]
+            return None
+
+        def _get_priority(self):
+            for i, a in enumerate(self._args):
+                if a == "--priority" and i+1 < len(self._args):
+                    return int(self._args[i+1])
+            return None
+
+        @property
+        def task_id(self):   return self._get_task_id()
+        @property
+        def priority(self):  return self._get_priority()
+        # 'type' is a Python built-in; expose as 'task_type' to avoid shadowing
+        @property
+        def task_type(self): return self._get_type()
 
     args = Args()
-
     if cmd == "add":
         cmd_add(args._args)
     elif cmd == "status":
