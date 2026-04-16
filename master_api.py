@@ -30,7 +30,7 @@ API 端点：
         WS     /ws                  — 实时任务状态推送
 """
 
-import os, sys, json, time, uuid, threading, signal, asyncio, queue as tqueue
+import os, sys, json, time, uuid, threading, signal, asyncio, queue as tqueue, socketserver
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -43,6 +43,7 @@ from paths import BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR, AGENTS_DIR,
 from models import TaskStatus
 from swarm_scheduler import create_task, get_online_nodes, get_all_tasks, get_task_result
 from orchestrator import Orchestrator
+from networking import HubServer, _make_handler
 
 
 # ── 文件操作 ──────────────────────────────────────────────────────────────
@@ -551,6 +552,7 @@ def main():
     parser = argparse.ArgumentParser(description="ClawSwarm Master API Server")
     parser.add_argument("--port", "-p", type=int, default=5000)
     parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--hub-port", type=int, default=18080, help="Hub Server port for cross-network task dispatch")
     args = parser.parse_args(sys.argv[1:])
 
     ensure_dirs()
@@ -560,6 +562,24 @@ def main():
     bg_thread.start()
     log("[BG] Background queue processor started")
 
+    # ── 启动 Hub Server（networking 模块，跨公网任务下发）───────────────
+    _hub_port = getattr(args, 'hub_port', 18080)
+    hub = HubServer()
+    hub_handler = _make_handler(hub)
+    hub_srv = socketserver.ThreadingTCPServer(("0.0.0.0", _hub_port), hub_handler)
+    hub_srv.allow_reuse_address = True
+    hub_thread = threading.Thread(target=hub_srv.serve_forever, daemon=True, name="HubServer")
+    hub_thread.start()
+    log(f"[Hub] Server started on http://0.0.0.0:{_hub_port}")
+    log(f"[Hub]   POST /hub/register        — agent 注册")
+    log(f"[Hub]   GET  /hub/agents         — 列出 agent")
+    log(f"[Hub]   GET  /hub/queue/<id>    — agent 轮询任务")
+    log(f"[Hub]   POST /hub/submit_task    — 下发任务")
+    log(f"[Hub]   POST /hub/submit/<tid>  — agent 提交结果")
+    log(f"[Hub]   GET  /hub/result/<tid>  — 获取结果")
+    log(f"[Hub]   GET  /hub/status         — Hub 状态")
+    # ── Hub Server 启动完毕 ─────────────────────────────────────────────
+
     def shutdown_handler(sig, frame):
         log("Shutdown signal received")
         sys.exit(0)
@@ -567,7 +587,8 @@ def main():
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
 
-    server = HTTPServer((args.host, args.port), MasterAPIHandler)
+    server = socketserver.ThreadingTCPServer((args.host, args.port), MasterAPIHandler)
+    server.allow_reuse_address = True
     log(f"Master API server starting on http://{args.host}:{args.port}")
     log("Endpoints:")
     log("  GET  /health              健康检查")
@@ -584,10 +605,15 @@ def main():
     log("  POST /nodes/<id>/wake     唤醒节点")
 
     try:
+        log("Master API ready, entering serve_forever loop")
         server.serve_forever()
     except KeyboardInterrupt:
         log("Shutting down")
         server.shutdown()
+    except Exception as e:
+        import traceback
+        log("ERROR in serve_forever: " + str(e))
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
