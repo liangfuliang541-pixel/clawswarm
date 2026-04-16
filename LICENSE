@@ -1,171 +1,21 @@
-GNU AFFERO GENERAL PUBLIC LICENSE
-                       Version 3, 19 November 2007
+MIT License
 
- Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
- Everyone is permitted to copy and distribute verbatim copies
- of this license document, but changing it is not allowed.
+Copyright (c) 2025-2026 liangfuliang541-pixel
 
-                            Preamble
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-  The GNU Affero General Public License is a free, copyleft license for
-software and other kinds of works, specifically designed to ensure
-cooperation with the community in the case of network server software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-  The licenses for most software and other practical works are designed
-to take away your freedom to share and change the works.  By contrast,
-our General Public Licenses are intended to guarantee your freedom to
-share and change all versions of a program--to make sure it remains free
-software for all its users.
-
-  When we speak of free software, we are referring to freedom, not
-price.  Our General Public Licenses are designed to make sure that you
-have the freedom to distribute copies of free software (and charge for
-them if you wish), that you receive source code or can get it if you
-want it, that you can change the software or use pieces of it in new
-free programs, and that you know you can do these things.
-
-  Developers that use our General Public Licenses protect your rights
-with two steps: (1) assert copyright on the software, and (2) offer
-you this License giving you legal permission to copy, distribute
-and/or modify the software.
-
-  A secondary benefit of defending all users' freedom is that
-improvements made in alternate versions of the program, if they
-receive widespread use, become available for other developers to
-incorporate.  Many developers of free software are heartened and
-encouraged by the resulting cooperation.  However, in the case of
-software used on network servers, this result may fail to serve the
-same interest in providing adequate access to the use of the program
-on a network server.  It does serve the deeper interest in promoting
-the community spirit and public trust in the software generally.
-
-  For clarification, this License does not intend to limit your rights
-under fair use or similar doctrines, such as those related to
-copyright or patent law.  The goal is to ensure that the software
-(and derivative works thereof) can be freely used and redistributed
-by anyone, with the requirement that any modifications must also be
-freely available under the same terms.
-
-  Terms such as "source code", "object code", "executable", and
-"source or object code" are defined in the license as follows:
-
-  "Source code" for a work means the preferred form of the work
-for making modifications to it.  "Object code" means any non-source
-form of a work.
-
-  The "System" includes any information or resource accessible from
-or by means of a network server that is used by multiple users
-simultaneously, regardless of whether the information or resource
-is stored on a computer or is transmitted over network links.
-
-  "Commercial use" means use of the software by a business, company,
-or other organization for profit, or in connection with any
-activity that generates revenue, income, or profit.
-
-  "Modified Source" means any derivative work of the software,
-meaning a work containing the software or a portion of it, either
-in source or object form, with changes made to the software.
-
-  The "Work" means the software and any source or object form in
-which the software may be modified.
-
-  "You" means any individual or entity exercising rights under this
-License.
-
-  "Your" has a corresponding meaning.
-
-  Under this License, you may modify the Work in any way, and
-distribute, publicly display, publicly perform, sublicense, and
-sell copies of the Work, subject to the following conditions:
-
-  1. You must keep intact all notices that refer to this License and
-     to the disclaimer of warranties.
-
-  2. You must include a prominent notice in any copies or
-     substantial portions of the Work stating that it is provided
-     under the terms of this License.
-
-  3. You must keep intact all notices in the Work that refer to the
-     disclaimer of warranties.
-
-  4. You must provide a copy of this License along with the Work.
-
-  5. You may offer or impose any terms on the Work, provided that
-     you do not license the Work on terms that restrict the rights
-     granted under this License.
-
-  6. You must accompany any copy of the Work with the following
-     statement: "This work is based on ClawSwarm, available at
-     https://github.com/liangfuliang541-pixel/clawswarm".
-
-  7. Derivative Works: If you modify the Work, you must clearly
-     describe your modifications and indicate that the Work is a
-     derivative of ClawSwarm.
-
-  8. You may distribute, publicly display, publicly perform, or
-     sublicense a Derivative Work, provided that you also meet the
-     conditions of this License for the Work.
-
-  9. The Work and any derivative works must be distributed under the
-     same license as the original Work.
-
-  10. If you distribute the Work (or a Derivative Work), you must
-      make the source code of the Work (and Derivative Works) available
-      to recipients under the same terms as this License.
-
-  11. You may not impose any further restrictions on the exercise of
-      the rights granted under this License.
-
-  For more details, see the full text of the GNU Affero General Public
-License at https://www.gnu.org/licenses/agpl-3.0.html.
-
----
-
-## Commercial License Exception
-
-In addition to the rights granted under the GNU Affero General Public
-License, the copyright holder grants the following additional rights
-for Commercial Use:
-
-  1. You may use the Work in proprietary software without releasing
-     your source code.
-
-  2. You may distribute the Work (or derivative works) as part of a
-     commercial product or service without providing source code.
-
-  To obtain a Commercial License, please contact the copyright holder:
-
-  Email: liangfuliang541@gmail.com
-
-  The Commercial License includes:
-  - No obligation to disclose source code
-  - Technical support
-  - Priority bug fixes
-  - Custom feature development
-
----
-
-## Disclaimer of Warranty
-
-  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
-APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
-HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
-OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
-THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE
-PROGRAM IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME
-THE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
-
----
-
-## Limitation of Liability
-
-  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
-WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
-THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
-GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
-USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
-DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR
-THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER
-PROGRAMS), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGES.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

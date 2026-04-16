@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/version-v0.9.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
   <img src="https://img.shields.io/badge/tests-107%20passed-success" alt="Tests">
-  <img src="https://img.shields.io/badge/license-AGPL%20v3-orange" alt="License">
+  <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
   <img src="https://img.shields.io/badge/MCP-2024--11--05-purple" alt="MCP">
 </p>
 
@@ -14,7 +14,7 @@
 
 *让多个 AI Agent 像龙虾群一样协同工作*
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-green.svg)](https://www.python.org/)
 [![GitHub stars](https://img.shields.io/github/stars/liangfuliang541-pixel/clawswarm?style=social)](https://github.com/liangfuliang541-pixel/clawswarm/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/liangfuliang541-pixel/clawswarm?style=social)](https://github.com/liangfuliang541-pixel/clawswarm/network)
@@ -263,9 +263,7 @@ python examples/04_mcp_demo.py     # MCP 协议调用示例
 
 ## 📄 许可证
 
-**AGPL v3** - 见 [LICENSE](LICENSE)
-
-商业授权请联系：liangfuliang541@gmail.com
+**MIT** - 见 [LICENSE](LICENSE)
 
 ---
 

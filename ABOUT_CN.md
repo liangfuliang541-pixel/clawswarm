@@ -202,7 +202,7 @@ HITL_POLICY=always_require
 - [ ] LangChain / LlamaIndex 集成
 - [ ] 云原生模式（Redis + PostgreSQL）
 - [ ] Web 版 DAG 编辑器
-- [ ] 商业授权（AGPL + 企业版）
+- [ ] 商业授权（MIT + 企业版）
 
 ---
 
@@ -219,7 +219,7 @@ HITL_POLICY=always_require
 ## 团队与社区
 
 - **Author**: [liangfuliang541-pixel](https://github.com/liangfuliang541-pixel)
-- **License**: [AGPL v3](LICENSE)
+- **License**: [MIT](LICENSE)
 - **Issues**: [GitHub Issues](https://github.com/liangfuliang541-pixel/clawswarm/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/liangfuliang541-pixel/clawswarm/discussions)
 

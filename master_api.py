@@ -30,7 +30,7 @@ API 端点：
         WS     /ws                  — 实时任务状态推送
 """
 
-import os, sys, json, time, uuid, threading, signal, asyncio
+import os, sys, json, time, uuid, threading, signal, asyncio, queue as tqueue
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paths import BASE_DIR, QUEUE_DIR, IN_PROGRESS_DIR, RESULTS_DIR, AGENTS_DIR, LOGS_DIR, ensure_dirs
 from models import TaskStatus
 from swarm_scheduler import create_task, get_online_nodes, get_all_tasks, get_task_result
+from orchestrator import Orchestrator
 
 
 # ── 文件操作 ──────────────────────────────────────────────────────────────
@@ -366,7 +367,13 @@ class MasterAPIHandler(BaseHTTPRequestHandler):
                 task["assigned_to"] = assigned_to
                 path_to_write = os.path.join(QUEUE_DIR, f"{task_id}.json")
                 write_json(path_to_write, task)
-            log(f"[CREATE] {task_id} (type={task_type}) -> {assigned_to or 'unassigned'}")
+            else:
+                # 未指定节点：加入后台处理队列
+                path_to_write = os.path.join(QUEUE_DIR, f"{task_id}.json")
+                write_json(path_to_write, task)
+                _enqueue_task(task_id, task)
+
+            log(f"[CREATE] {task_id} (type={task_type}) -> {assigned_to or 'queued for processing'}")
             self.send_json(201, {"task_id": task_id, "task": task})
 
         # POST /tasks/<id>/retry
@@ -429,6 +436,114 @@ class MasterAPIHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
+# ── 任务队列后台处理器 ───────────────────────────────────────────────────
+
+# 任务队列（用于解耦 HTTP 请求和实际处理）
+_task_queue: "tqueue.Queue" = tqueue.Queue()
+_orc = None  # 单例 orchestrator
+
+
+def _enqueue_task(task_id: str, task: dict):
+    """将任务加入处理队列"""
+    _task_queue.put((task_id, task))
+    log(f"[QUEUED] {task_id} queued for processing")
+
+
+def _process_queue_loop():
+    """
+    后台线程：从队列中取出任务，调用 orchestrator 处理。
+    循环运行，直到 SHUTDOWN_REQUESTED。
+    """
+    global _orc
+    _orc = Orchestrator(timeout=180.0, use_llm=False)
+
+    log("[BG] Queue processor thread started")
+
+    while not SHUTDOWN_REQUESTED:
+        task_id = None
+        task = None
+
+        # 非阻塞取出任务
+        try:
+            item = _task_queue.get(block=True, timeout=1.0)
+            task_id, task = item
+        except tqueue.Empty:
+            # 队列空，扫描 queue/ 目录有没有新任务
+            _scan_queue_dir()
+            continue
+
+        if task_id is None:
+            continue
+
+        # 移动: queue/ → in_progress/
+        src = os.path.join(QUEUE_DIR, f"{task_id}.json")
+        dst = os.path.join(IN_PROGRESS_DIR, f"p_{task_id}.json")
+        if os.path.exists(src):
+            os.rename(src, dst)
+
+        task["status"] = "running"
+        task["started_at"] = datetime.now().isoformat()
+        write_json(dst, task)
+
+        log(f"[BG] Processing task {task_id}: {task.get('description', '')[:60]}")
+
+        # 调用 orchestrator 处理
+        start = time.time()
+        try:
+            desc = task.get("description") or task.get("prompt", "")
+            result = _orc.run(desc)
+            duration = time.time() - start
+
+            # 构建结果
+            result_data = {
+                "task_id": task_id,
+                "status": "done" if result.success else "failed",
+                "result": result.final_output,
+                "duration_seconds": duration,
+                "completed_at": datetime.now().isoformat(),
+                "errors": result.errors,
+            }
+            log(f"[BG] Task {task_id} done ({duration:.1f}s): success={result.success}")
+
+        except Exception as e:
+            duration = time.time() - start
+            result_data = {
+                "task_id": task_id,
+                "status": "failed",
+                "error": str(e),
+                "duration_seconds": duration,
+                "completed_at": datetime.now().isoformat(),
+            }
+            log(f"[BG] Task {task_id} failed: {e}")
+
+        # 写结果到 results/
+        result_path = os.path.join(RESULTS_DIR, f"r_{task_id}.json")
+        write_json(result_path, result_data)
+
+        # 从 in_progress/ 删除
+        if os.path.exists(dst):
+            os.remove(dst)
+
+    log("[BG] Queue processor thread stopped")
+
+
+def _scan_queue_dir():
+    """扫描 queue/ 目录，发现新任务则加入处理队列"""
+    try:
+        for fname in os.listdir(QUEUE_DIR):
+            if not fname.endswith(".json") or fname.startswith("r_") or fname.startswith("p_"):
+                continue
+            task_id = fname[:-5]  # 去掉 .json
+            path = os.path.join(QUEUE_DIR, fname)
+            task = read_json(path)
+            if task and task.get("status") == "pending" and not task.get("assigned_to"):
+                # 未分配的任务，加入队列处理
+                _task_queue.put((task_id, task))
+                log(f"[BG] Discovered queued task {task_id}")
+    except Exception as e:
+        pass  # 静默忽略扫描错误
+
+
 # ── 主入口 ────────────────────────────────────────────────────────────────
 
 def main():
@@ -439,6 +554,11 @@ def main():
     args = parser.parse_args(sys.argv[1:])
 
     ensure_dirs()
+
+    # 启动后台任务处理线程
+    bg_thread = threading.Thread(target=_process_queue_loop, daemon=True, name="QueueProcessor")
+    bg_thread.start()
+    log("[BG] Background queue processor started")
 
     def shutdown_handler(sig, frame):
         log("Shutdown signal received")

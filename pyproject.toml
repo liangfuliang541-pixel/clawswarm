@@ -7,7 +7,7 @@ name = "clawswarm"
 version = "0.6.0"
 description = "Multi-Agent Orchestration Framework - Coordinate multiple AI Agents like a lobster swarm 🦞"
 readme = "README.md"
-license = {text = "AGPL-3.0-or-later"}
+license = {text = "MIT"}
 authors = [
     {name = "liangfuliang541-pixel", email = "liangfuliang541@gmail.com"}
 ]
@@ -15,7 +15,7 @@ keywords = ["ai", "agents", "multi-agent", "orchestration", "clawswarm", "opencl
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
