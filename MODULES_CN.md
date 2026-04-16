@@ -546,3 +546,35 @@ Collect → Filter → Transform → Aggregate → Export
 from result_pipeline import quick_aggregate
 result = quick_aggregate(["research", "write"], timeout=60)
 ```
+
+
+---
+
+### 
+etworking.py — 跨公网 Hub-Spoke 通信模块
+
+**架构**：Hub-Spoke 反向轮询模型。Hub 被动接收连接，Agent 主动轮询。
+
+`
+你的电脑（Hub，port 18080） ←———— HTTP 轮询 ———— VM（Agent）
+`
+
+| 组件 | 角色 | 运行位置 |
+|------|------|----------|
+| HubServer | Hub 端，任务队列 + agent 注册 | 你的 Windows |
+| HubAgent | Agent 端，HTTP client 轮询 Hub | KimiClaw VM |
+| HubClient | 主控端 client，主动下发任务 | 你的 Windows |
+
+**CLI 用法**：
+
+`ash
+# Hub 端（你的 Windows）：python networking.py hub [--port 18080]
+# Agent 端（VM）：python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id kimi-claw
+# 主控端下发任务：python networking.py client --hub-url http://localhost:18081 --task '...' --task-type fetch
+`
+
+**关键设计**：
+- Hub 不需要公网 IP（Agent 主动连 Hub）
+- VM 不需要 inbound 端口（只有 outbound HTTP 请求）
+- 任务队列基于文件系统，原子 pop，无 Redis 依赖
+- 轮询间隔可配置（默认 3s）

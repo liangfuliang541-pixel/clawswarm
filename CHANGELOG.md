@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`networking.py`** (NEW): 跨公网 Hub-Spoke 通信模块 — HubServer(Hub端) + HubAgent(VM端HTTP client) + HubClient(主控端)，无需 tunnel/SSH/公网IP，Agent 主动轮询 Hub
 - **`clawchat.py`** (NEW): Agent 间实时聊天模块 — SQLite 持久存储 + FastAPI HTTP API (port 5002) + WebSocket 实时推送 + RelayBridge 跨公网桥接
 - **`dashboard/index.html`**: 新增 ClawChat 抽屉面板（右下角聊天气泡按钮，点击展开，实时消息推送）
 - **`ops_manual.md`**: 全面重写 — 包含 Cloudflare Tunnel 安装步骤、ClawChat HTTP API、已知问题修复
