@@ -3,733 +3,1647 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ClawSwarm Dashboard</title>
+<title>ClawSwarm — 龙虾集群控制台</title>
 <style>
-  :root {
-    --bg: #0a0e17;
-    --surface: #111827;
-    --border: #1f2937;
-    --text: #e5e7eb;
-    --muted: #9ca3af;
-    --accent: #3b82f6;
-    --green: #10b981;
-    --yellow: #f59e0b;
-    --red: #ef4444;
-    --purple: #8b5cf6;
-    --cyan: #06b6d4;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', 'Consolas', monospace;
-    min-height: 100vh;
-  }
-  .header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .header .logo { font-size: 20px; }
-  .header .title { font-size: 15px; font-weight: 600; }
-  .header .subtitle { color: var(--muted); font-size: 12px; }
-  .status-badge {
-    margin-left: auto;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 600;
-    border: 1px solid;
-  }
-  .status-badge.online { background: rgba(16,185,129,0.1); border-color: var(--green); color: var(--green); }
-  .status-badge.offline { background: rgba(239,68,68,0.1); border-color: var(--red); color: var(--red); }
-  .status-badge.demo { background: rgba(139,92,246,0.1); border-color: var(--purple); color: var(--purple); }
+/* ═══════════════════════════════════════════════════════════════
+   ClawSwarm Dashboard v2.0 — Modern Dark Theme
+   Inspired by Linear, Vercel, and Grafana
+   ═══════════════════════════════════════════════════════════════ */
 
-  .layout { display: grid; grid-template-columns: 260px 1fr 300px; height: calc(100vh - 53px); overflow: hidden; }
+:root {
+  /* ── 色彩系统 ─────────────────────────────────────────────── */
+  --bg-primary:     #09090b;
+  --bg-secondary:   #0c0c0f;
+  --bg-elevated:    #131316;
+  --bg-surface:      #18181b;
+  --bg-surface-2:    #1f1f23;
+  --bg-surface-3:   #27272a;
 
-  /* Sidebar: Nodes */
-  .sidebar {
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    overflow-y: auto;
-    padding: 16px;
-  }
-  .sidebar h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; }
-  .node-card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 8px;
-  }
-  .node-card .name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .node-card .meta { font-size: 11px; color: var(--muted); }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-  .dot.online { background: var(--green); }
-  .dot.offline { background: var(--red); }
+  --border-subtle:  #27272a;
+  --border-default: #3f3f46;
+  --border-hover:   #52525b;
 
-  /* Main content */
-  .main { overflow-y: auto; padding: 16px; }
+  --text-primary:   #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #71717a;
+  --text-disabled:  #52525b;
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    text-align: center;
-  }
-  .stat-card .value { font-size: 28px; font-weight: 700; }
-  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
-  .stat-card.blue .value { color: var(--accent); }
-  .stat-card.green .value { color: var(--green); }
-  .stat-card.yellow .value { color: var(--yellow); }
-  .stat-card.purple .value { color: var(--purple); }
+  /* 状态色 */
+  --status-success:     #10b981;
+  --status-warning:     #f59e0b;
+  --status-error:       #ef4444;
+  --status-info:        #3b82f6;
+  --status-processing:  #8b5cf6;
 
-  /* Task Form */
-  .new-task {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    margin-bottom: 20px;
-  }
-  .new-task h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
-  .new-task textarea {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 12px;
-    padding: 10px;
-    resize: vertical;
-    min-height: 70px;
-    margin-bottom: 8px;
-  }
-  .new-task textarea:focus { outline: none; border-color: var(--accent); }
-  .new-task button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 20px;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .new-task button:hover { opacity: 0.85; }
+  /* 品牌渐变 */
+  --gradient-brand: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%);
+  --gradient-subtle: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%);
+  --gradient-glow:  radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.2) 0%, transparent 70%);
 
-  /* DAG */
-  .dag-section { margin-bottom: 20px; }
-  .section-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
-  .dag-container {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    min-height: 180px;
-    overflow-x: auto;
-  }
-  .dag-canvas { position: relative; min-width: 100%; min-height: 140px; }
-  .dag-node {
-    position: absolute;
-    background: var(--bg);
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    min-width: 120px;
-    text-align: center;
-  }
-  .dag-node:hover { border-color: var(--accent); transform: translateY(-2px); }
-  .dag-node.pending { border-color: var(--yellow); color: var(--yellow); }
-  .dag-node.running { border-color: var(--accent); color: var(--accent); }
-  .dag-node.success { border-color: var(--green); color: var(--green); }
-  .dag-node.failed { border-color: var(--red); color: var(--red); }
-  .dag-node .task-id { font-size: 10px; color: var(--muted); margin-top: 4px; font-weight: 400; }
-  .dag-node .spinner {
-    display: inline-block; width: 12px; height: 12px;
-    border: 2px solid var(--accent);
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 4px;
-    vertical-align: middle;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* ── 尺寸与圆角 ───────────────────────────────────────────── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
 
-  /* Right panel: Tasks + Events */
-  .right-panel {
-    background: var(--surface);
-    border-left: 1px solid var(--border);
-    overflow-y: auto;
-    padding: 16px;
-  }
-  .right-panel h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; }
+  /* ── 阴影 ─────────────────────────────────────────────────── */
+  --shadow-sm:    0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md:    0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:    0 8px 24px rgba(0,0,0,0.4);
+  --shadow-glow:  0 0 20px rgba(59,130,246,0.3);
 
-  .task-item {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 6px;
-    font-size: 12px;
-  }
-  .task-item .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-  .task-item .task-id { color: var(--muted); font-size: 10px; }
-  .task-item .status-tag {
-    font-size: 10px; padding: 2px 6px; border-radius: 4px;
-    font-weight: 600; text-transform: uppercase;
-  }
-  .status-tag.pending { background: rgba(245,158,11,0.15); color: var(--yellow); }
-  .status-tag.running { background: rgba(59,130,246,0.15); color: var(--accent); }
-  .status-tag.success { background: rgba(16,185,129,0.15); color: var(--green); }
-  .status-tag.failed { background: rgba(239,68,68,0.15); color: var(--red); }
-  .task-item .prompt { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* ── 动画 ─────────────────────────────────────────────────── */
+  --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:   300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-  .event-log { margin-top: 16px; }
-  .event-item {
-    font-size: 11px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .event-item .time { color: var(--cyan); margin-right: 6px; }
-  .event-item.task_update .msg { color: var(--accent); }
-  .event-item.task_created .msg { color: var(--yellow); }
-  .event-item.task_completed .msg { color: var(--green); }
+/* ═══════════════════════════════════════════════════════════════
+   基础重置与全局样式
+   ═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .conn-indicator {
-    position: fixed;
-    bottom: 16px;
-    right: 16px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--red);
-    transition: background 0.3s;
-  }
-  .conn-indicator.connected { background: var(--green); }
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  .empty-state {
-    text-align: center;
-    color: var(--muted);
-    font-size: 13px;
-    padding: 30px 10px;
-  }
-  .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow: hidden;
+}
 
-  /* ── Chat Drawer ── */
-  .chat-toggle {
-    position: fixed;
-    bottom: 16px;
-    right: 40px;
-    width: 44px; height: 44px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: none;
-    cursor: pointer;
-    font-size: 20px;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 12px rgba(59,130,246,0.4);
-    z-index: 200;
-    transition: transform 0.15s;
-  }
-  .chat-toggle:hover { transform: scale(1.1); }
-  .chat-badge {
-    position: absolute; top: -4px; right: -4px;
-    min-width: 18px; height: 18px;
-    background: var(--red);
-    color: white; font-size: 10px; font-weight: 700;
-    border-radius: 9px; padding: 0 4px;
-    display: none; align-items: center; justify-content: center;
-  }
-  .chat-badge.show { display: flex; }
+/* 自定义滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 
-  .chat-drawer {
-    position: fixed;
-    bottom: 0; right: 0;
-    width: 340px; height: 480px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px 12px 0 0;
-    display: flex; flex-direction: column;
-    z-index: 201;
-    transform: translateY(100%);
-    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
-  }
-  .chat-drawer.open { transform: translateY(0); }
+/* ═══════════════════════════════════════════════════════════════
+   顶层导航栏
+   ═══════════════════════════════════════════════════════════════ */
+.top-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  z-index: 1000;
+  gap: 16px;
+}
 
-  .chat-header {
-    display: flex; align-items: center; gap: 8px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px; font-weight: 600;
-    cursor: pointer;
-  }
-  .chat-header .dot-online { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-  .chat-header .dot-offline { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
-  .chat-close { margin-left: auto; font-size: 16px; opacity: 0.6; }
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
 
-  .chat-msgs {
-    flex: 1; overflow-y: auto; padding: 10px 14px;
-    display: flex; flex-direction: column; gap: 6px;
-  }
-  .chat-msg { max-width: 80%; padding: 7px 11px; border-radius: 10px; font-size: 12px; line-height: 1.4; }
-  .chat-msg.sent { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 3px; }
-  .chat-msg.rcvd { align-self: flex-start; background: var(--border); color: var(--text); border-bottom-left-radius: 3px; }
-  .chat-msg .sender { font-size: 10px; opacity: 0.65; margin-bottom: 2px; }
-  .chat-msg .ts { font-size: 9px; opacity: 0.5; margin-top: 2px; text-align: right; }
-  .chat-welcome { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 0; }
+.nav-logo {
+  width: 32px;
+  height: 32px;
+  background: var(--gradient-brand);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: var(--shadow-glow);
+}
 
-  .chat-input-row { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border); }
-  .chat-input {
-    flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-    color: var(--text); font-family: inherit; font-size: 12px; padding: 7px 10px;
-  }
-  .chat-input:focus { outline: none; border-color: var(--accent); }
-  .chat-send {
-    background: var(--accent); color: white; border: none; border-radius: 6px;
-    padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
-  }
-  .chat-send:hover { opacity: 0.85; }
-  .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.nav-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.nav-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-subtle);
+  margin: 0 8px;
+}
+
+.nav-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.cluster-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-success);
+  box-shadow: 0 0 8px var(--status-success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.cluster-dot.offline { background: var(--status-error); box-shadow: 0 0 8px var(--status-error); }
+.cluster-dot.demo { background: var(--status-processing); box-shadow: 0 0 8px var(--status-processing); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.nav-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-icon:hover {
+  background: var(--bg-surface-2);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   主布局
+   ═══════════════════════════════════════════════════════════════ */
+.main-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr 320px;
+  height: calc(100vh - 56px);
+  margin-top: 56px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   左侧边栏 — 节点列表
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar-left {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.sidebar-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+/* ── 节点卡片 ─────────────────────────────────────────────────── */
+.node-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.node-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-brand);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.node-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.node-card:hover::before { opacity: 1; }
+
+.node-card.selected {
+  border-color: var(--status-info);
+  background: var(--bg-surface-2);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.node-avatar {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.node-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-status-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-online { background: rgba(16,185,129,0.15); color: var(--status-success); }
+.status-offline { background: rgba(239,68,68,0.15); color: var(--status-error); }
+.status-busy { background: rgba(245,158,11,0.15); color: var(--status-warning); }
+.status-idle { background: rgba(59,130,246,0.15); color: var(--status-info); }
+
+.node-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.node-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.node-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.node-stat-value {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 进度条 ───────────────────────────────────────────────────── */
+.progress-bar {
+  height: 3px;
+  background: var(--bg-surface-3);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--gradient-brand);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-slow);
+}
+
+/* ── 能力标签 ─────────────────────────────────────────────────── */
+.node-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.cap-tag {
+  font-size: 9px;
+  padding: 2px 6px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   中央主区域
+   ═══════════════════════════════════════════════════════════════ */
+.main-content {
+  background: var(--bg-primary);
+  overflow-y: auto;
+  padding: 20px;
+  position: relative;
+}
+
+.main-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: var(--gradient-glow);
+  pointer-events: none;
+}
+
+/* ── 状态卡片组 ───────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.stat-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%);
+  opacity: 0.05;
+  transform: translate(20px, -20px);
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+
+.stat-card.blue .stat-icon { background: rgba(59,130,246,0.15); color: var(--status-info); }
+.stat-card.green .stat-icon { background: rgba(16,185,129,0.15); color: var(--status-success); }
+.stat-card.yellow .stat-icon { background: rgba(245,158,11,0.15); color: var(--status-warning); }
+.stat-card.purple .stat-icon { background: rgba(139,92,246,0.15); color: var(--status-processing); }
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card.blue .stat-value { color: var(--status-info); }
+.stat-card.green .stat-value { color: var(--status-success); }
+.stat-card.yellow .stat-value { color: var(--status-warning); }
+.stat-card.purple .stat-value { color: var(--status-processing); }
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-trend {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+}
+
+.stat-trend.up { background: rgba(16,185,129,0.15); color: var(--status-success); }
+.stat-trend.down { background: rgba(239,68,68,0.15); color: var(--status-error); }
+
+/* ── 任务提交区 ───────────────────────────────────────────────── */
+.task-submit-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title svg { color: var(--status-info); }
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-textarea {
+  width: 100%;
+  min-height: 100px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+}
+
+.task-textarea::placeholder { color: var(--text-muted); }
+
+.task-textarea:focus {
+  outline: none;
+  border-color: var(--status-info);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+.task-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-type-select {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.btn-primary {
+  background: var(--gradient-brand);
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 10px 20px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+/* ── DAG 可视化 ───────────────────────────────────────────────── */
+.dag-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  margin-bottom: 24px;
+  min-height: 280px;
+  position: relative;
+}
+
+.dag-container {
+  position: relative;
+  min-height: 200px;
+  overflow: auto;
+}
+
+.dag-canvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 180px;
+}
+
+.dag-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dag-node {
+  position: absolute;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  min-width: 140px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 10;
+}
+
+.dag-node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.dag-node.pending { border-color: var(--status-warning); }
+.dag-node.running { 
+  border-color: var(--status-info); 
+  box-shadow: 0 0 16px rgba(59,130,246,0.3);
+  animation: node-pulse 1.5s ease-in-out infinite;
+}
+.dag-node.success { border-color: var(--status-success); }
+.dag-node.failed { border-color: var(--status-error); }
+
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(59,130,246,0.3); }
+  50% { box-shadow: 0 0 24px rgba(59,130,246,0.5); }
+}
+
+.dag-node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dag-node-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dag-node.pending .dag-node-status { background: var(--status-warning); }
+.dag-node.running .dag-node-status { background: var(--status-info); animation: spin 1s linear infinite; }
+.dag-node.success .dag-node-status { background: var(--status-success); }
+.dag-node.failed .dag-node-status { background: var(--status-error); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.dag-node-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dag-node-id {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.dag-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--status-info);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* DAG 连线样式 */
+.dag-edge {
+  stroke: var(--border-default);
+  stroke-width: 2;
+  fill: none;
+}
+
+.dag-edge.active {
+  stroke: var(--status-info);
+  stroke-dasharray: 5 3;
+  animation: dash 1s linear infinite;
+}
+
+@keyframes dash { to { stroke-dashoffset: -8; } }
+
+.dag-arrow {
+  fill: var(--border-default);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   右侧边栏 — 任务与事件
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar-right {
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.right-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tabs {
+  display: flex;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tab-btn:hover { color: var(--text-secondary); }
+.tab-btn.active {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.right-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+/* ── 任务列表 ───────────────────────────────────────────────── */
+.task-list { }
+
+.task-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.task-item:hover {
+  border-color: var(--border-default);
+  transform: translateX(4px);
+}
+
+.task-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.task-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.task-status {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.task-item.pending .task-status { background: rgba(245,158,11,0.15); color: var(--status-warning); }
+.task-item.running .task-status { background: rgba(59,130,246,0.15); color: var(--status-info); }
+.task-item.success .task-status { background: rgba(16,185,129,0.15); color: var(--status-success); }
+.task-item.failed .task-status { background: rgba(239,68,68,0.15); color: var(--status-error); }
+
+.task-prompt {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.task-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── 事件流 ─────────────────────────────────────────────────── */
+.event-list { }
+
+.event-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn { to { opacity: 1; } }
+
+.event-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.event-type {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.event-item.task_created .event-type { background: var(--status-warning); }
+.event-item.task_started .event-type { background: var(--status-info); }
+.event-item.task_completed .event-type { background: var(--status-success); }
+.event-item.node_status_change .event-type { background: var(--status-processing); }
+.event-item.error .event-type { background: var(--status-error); }
+
+.event-content {
+  flex: 1;
+}
+
+.event-msg {
+  color: var(--text-secondary);
+}
+
+.event-item.task_created .event-msg { color: var(--status-warning); }
+.event-item.task_completed .event-msg { color: var(--status-success); }
+.event-item.task_started .event-msg { color: var(--status-info); }
+
+/* ═══════════════════════════════════════════════════════════════
+   空状态
+   ═══════════════════════════════════════════════════════════════ */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.empty-desc {
+  font-size: 12px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   连接状态指示器
+   ═══════════════════════════════════════════════════════════════ */
+.conn-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--status-error);
+  box-shadow: 0 0 12px var(--status-error);
+  z-index: 1000;
+  transition: all var(--transition-normal);
+}
+
+.conn-indicator.connected {
+  background: var(--status-success);
+  box-shadow: 0 0 12px var(--status-success);
+}
+
+.conn-tooltip {
+  position: absolute;
+  bottom: 20px;
+  right: 26px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: all var(--transition-fast);
+  pointer-events: none;
+}
+
+.conn-indicator:hover .conn-tooltip {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Toast 通知
+   ═══════════════════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-lg);
+  animation: toastIn 0.3s ease;
+  max-width: 400px;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.toast.success .toast-icon { background: rgba(16,185,129,0.2); color: var(--status-success); }
+.toast.info .toast-icon { background: rgba(59,130,246,0.2); color: var(--status-info); }
+.toast.warning .toast-icon { background: rgba(245,158,11,0.2); color: var(--status-warning); }
+.toast.error .toast-icon { background: rgba(239,68,68,0.2); color: var(--status-error); }
+
+.toast-msg {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.toast-close:hover { color: var(--text-primary); }
+
+/* ═══════════════════════════════════════════════════════════════
+   响应式适配
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 1200px) {
+  .main-layout { grid-template-columns: 220px 1fr 280px; }
+}
+
+@media (max-width: 900px) {
+  .main-layout { grid-template-columns: 1fr; }
+  .sidebar-left, .sidebar-right { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SVG 图标 (内联)
+   ═══════════════════════════════════════════════════════════════ */
+.icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.icon-16 { width: 16px; height: 16px; }
+.icon-20 { width: 20px; height: 20px; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <span class="logo">&#x1F98A;</span>
-  <span class="title">ClawSwarm Dashboard</span>
-  <span class="subtitle">Real-time Task Monitor</span>
-  <span class="status-badge demo" id="statusBadge">DEMO</span>
-</div>
-
-<div class="layout">
-  <!-- Left: Nodes -->
-  <div class="sidebar">
-    <h3>Nodes</h3>
-    <div id="nodeList">
-      <div class="empty-state"><div class="icon">&#x1F98A;</div>Connecting...</div>
+<!-- 顶部导航 -->
+<nav class="top-nav">
+  <div class="nav-brand">
+    <div class="nav-logo">🦞</div>
+    <div class="nav-title">ClawSwarm</div>
+    <div class="nav-divider"></div>
+    <div class="nav-cluster">
+      <span class="cluster-dot" id="clusterDot"></span>
+      <span id="clusterName">本地集群</span>
     </div>
   </div>
 
-  <!-- Center: Main -->
-  <div class="main">
-    <div class="stats">
+  <div class="nav-status">
+    <div class="nav-time" id="navTime">--:--:--</div>
+    <div class="nav-actions">
+      <button class="btn-icon" title="刷新" onclick="refreshAll()">
+        <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+      </button>
+      <button class="btn-icon" title="设置">
+        <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- 主布局 -->
+<div class="main-layout">
+  <!-- 左侧：节点列表 -->
+  <aside class="sidebar-left">
+    <div class="sidebar-header">
+      <span class="sidebar-title">节点集群</span>
+      <span class="sidebar-count" id="nodeCount">0</span>
+    </div>
+    <div class="sidebar-content" id="nodeList">
+      <div class="empty-state">
+        <div class="empty-icon">🦞</div>
+        <div class="empty-title">等待节点上线</div>
+        <div class="empty-desc">节点将自动显示在这里</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 中央：主内容区 -->
+  <main class="main-content">
+    <!-- 统计卡片 -->
+    <div class="stats-grid">
       <div class="stat-card blue">
-        <div class="value" id="statNodes">0</div>
-        <div class="label">Nodes</div>
+        <div class="stat-icon">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="8" rx="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/>
+            <line x1="6" y1="18" x2="6.01" y2="18"/>
+          </svg>
+        </div>
+        <div class="stat-value" id="statNodes">0</div>
+        <div class="stat-label">节点总数</div>
       </div>
       <div class="stat-card green">
-        <div class="value" id="statOnline">0</div>
-        <div class="label">Online</div>
+        <div class="stat-icon">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="stat-value" id="statOnline">0</div>
+        <div class="stat-label">在线节点</div>
       </div>
       <div class="stat-card yellow">
-        <div class="value" id="statPending">0</div>
-        <div class="label">Pending</div>
+        <div class="stat-icon">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="stat-value" id="statPending">0</div>
+        <div class="stat-label">待执行</div>
       </div>
       <div class="stat-card purple">
-        <div class="value" id="statDone">0</div>
-        <div class="label">Done</div>
+        <div class="stat-icon">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="stat-value" id="statDone">0</div>
+        <div class="stat-label">已完成</div>
       </div>
     </div>
 
-    <!-- New Task -->
-    <div class="new-task">
-      <h3>Submit New Task</h3>
-      <textarea id="taskPrompt" placeholder="Describe the task in natural language..."></textarea>
-      <button onclick="submitTask()">Launch Task</button>
-    </div>
+    <!-- 任务提交 -->
+    <section class="task-submit-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          提交新任务
+        </h2>
+      </div>
+      <form class="task-form" onsubmit="submitTask(event)">
+        <textarea class="task-textarea" id="taskPrompt" placeholder="用自然语言描述任务，例如：&#10;• 搜索最近一周 AI Agent 领域的重大新闻&#10;• 分析用户反馈，总结前 3 个痛点&#10;• 生成项目进度报告，发送到团队群"></textarea>
+        <div class="task-options">
+          <select class="task-type-select" id="taskType">
+            <option value="spawn">Spawn（智能分解）</option>
+            <option value="exec">Exec（命令执行）</option>
+            <option value="fetch">Fetch（数据获取）</option>
+            <option value="python">Python（脚本执行）</option>
+          </select>
+          <button type="submit" class="btn-primary">
+            <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            启动任务
+          </button>
+        </div>
+      </form>
+    </section>
 
-    <!-- DAG -->
-    <div class="dag-section">
-      <h3 class="section-title">Task DAG</h3>
+    <!-- DAG 可视化 -->
+    <section class="dag-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="18" r="3"/>
+            <circle cx="6" cy="6" r="3"/>
+            <path d="M13 6h3a2 2 0 012 2v7M6 9v3a2 2 0 002 2h7"/>
+          </svg>
+          任务执行 DAG
+        </h2>
+      </div>
       <div class="dag-container">
-        <div class="dag-canvas" id="dagCanvas"></div>
+        <svg class="dag-svg" id="dagSvg"></svg>
+        <div class="dag-canvas" id="dagCanvas">
+          <div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <div class="empty-title">暂无任务</div>
+            <div class="empty-desc">提交任务后，执行流程将在这里可视化</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 右侧：任务与事件 -->
+  <aside class="sidebar-right">
+    <div class="right-header">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tasks')">任务</button>
+        <button class="tab-btn" onclick="switchTab('events')">事件</button>
       </div>
     </div>
-  </div>
-
-  <!-- Right: Tasks + Events -->
-  <div class="right-panel">
-    <h3>Task List</h3>
-    <div id="taskList">
-      <div class="empty-state">No tasks yet</div>
+    <div class="right-content" id="rightContent">
+      <div class="task-list" id="taskList">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <div class="empty-title">暂无任务</div>
+          <div class="empty-desc">提交任务后将显示在这里</div>
+        </div>
+      </div>
+      <div class="event-list" id="eventList" style="display:none;"></div>
     </div>
-
-    <div class="event-log">
-      <h3>Live Events</h3>
-      <div id="eventLog"></div>
-    </div>
-  </div>
+  </aside>
 </div>
 
-<div class="conn-indicator" id="connIndicator" title="WebSocket connection"></div>
-
-<!-- Chat Drawer -->
-<div class="chat-drawer" id="chatDrawer">
-  <div class="chat-header" onclick="toggleChat()">
-    <span id="chatDot" class="dot-offline"></span>
-    <span>ClawChat</span>
-    <span id="chatPartner" style="font-weight:400;color:var(--muted);font-size:11px;">kimi-claw-01</span>
-    <span class="chat-close">&#x2715;</span>
-  </div>
-  <div class="chat-msgs" id="chatMsgs">
-    <div class="chat-welcome">Connecting to ClawChat...</div>
-  </div>
-  <div class="chat-input-row">
-    <input class="chat-input" id="chatInput" placeholder="Send a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMsg()}" disabled>
-    <button class="chat-send" id="chatSendBtn" onclick="sendChatMsg()" disabled>Send</button>
-  </div>
+<!-- 连接状态指示器 -->
+<div class="conn-indicator" id="connIndicator">
+  <div class="conn-tooltip">WebSocket 连接状态</div>
 </div>
 
-<!-- Chat Toggle Button -->
-<button class="chat-toggle" id="chatToggle" onclick="toggleChat()" title="ClawChat">
-  &#x1F4AC;
-  <span class="chat-badge" id="chatBadge">0</span>
-</button>
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
 
 <script>
-const WS_URL = "ws://localhost:5000/ws";
+/* ═══════════════════════════════════════════════════════════════
+   ClawSwarm Dashboard — 核心逻辑
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── 状态 ─────────────────────────────────────────────────────
 let ws = null;
 let tasks = [];
 let nodes = [];
 let events = [];
 let reconnectTimer = null;
+let selectedNode = null;
+let currentTab = 'tasks';
+
+// ── WebSocket 连接 ───────────────────────────────────────────
+const WS_URL = `ws://${location.host}/ws`;
 
 function connect() {
   ws = new WebSocket(WS_URL);
+
   ws.onopen = () => {
     document.getElementById('connIndicator').classList.add('connected');
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    showToast('success', '已连接到集群');
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
   };
-  ws.onclose = ws.onerror = () => {
+
+  ws.onclose = () => {
     document.getElementById('connIndicator').classList.remove('connected');
+    showToast('warning', '连接断开，正在重连...');
     reconnectTimer = setTimeout(connect, 3000);
   };
+
+  ws.onerror = (e) => {
+    document.getElementById('connIndicator').classList.remove('connected');
+    console.error('WebSocket error:', e);
+  };
+
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
       handleMessage(msg);
-    } catch(err) { console.warn('bad msg', err); }
+    } catch (err) {
+      console.warn('Bad message:', err);
+    }
   };
 }
 
+// ── 消息处理 ─────────────────────────────────────────────────
 function handleMessage(msg) {
-  switch (msg.type) {
-    case 'init':
-      if (msg.data) {
-        if (msg.data.nodes) { nodes = msg.data.nodes.list || msg.data.nodes; renderNodes(); }
-        if (msg.data.tasks) { tasks = msg.data.tasks; renderTasks(); renderDAG(); }
-        if (msg.data.events) { events = msg.data.events; renderEvents(); }
-        if (msg.data.swarm) updateSwarmStatus(msg.data.swarm);
-      }
+  const handlers = {
+    'init': () => {
+      const d = msg.data;
+      if (d.nodes) renderNodes(d.nodes.list || []);
+      if (d.tasks) { tasks = d.tasks; renderTasks(); renderDAG(); }
+      if (d.events) { events = d.events; renderEvents(); }
+      if (d.swarm) updateClusterStatus(d.swarm);
       updateStats();
-      break;
-    case 'task_update':
-      // {"type":"task_update","task_id":"...","status":"..."}
-      if (msg.task_id) {
-        let t = tasks.find(t => t.id === msg.task_id || t.task_id === msg.task_id);
-        if (t) {
-          t.status = msg.status;
-        } else {
-          t = { id: msg.task_id, task_id: msg.task_id, status: msg.status };
-          tasks.push(t);
-        }
+    },
+    'task_created': () => {
+      tasks.push(msg.task);
+      renderTasks();
+      renderDAG();
+      updateStats();
+      showToast('info', `任务 ${msg.task_id} 已创建`);
+      addEvent('task_created', `任务 ${msg.task_id} 已提交`);
+    },
+    'task_started': () => {
+      const t = tasks.find(t => t.id === msg.task_id);
+      if (t) { t.status = 'running'; renderTasks(); renderDAG(); }
+      updateStats();
+      addEvent('task_started', `任务 ${msg.task_id} 开始执行`);
+    },
+    'task_completed': () => {
+      const t = tasks.find(t => t.id === msg.task_id);
+      if (t) {
+        Object.assign(t, msg.result);
         renderTasks();
         renderDAG();
-        updateStats();
-        addEvent('task_update', `Task ${msg.task_id}: ${msg.status}`);
       }
-      break;
-    case 'task_created':
-      if (msg.task) { tasks.push(msg.task); }
-      else if (msg.task_id) { tasks.push({ id: msg.task_id, status: 'pending' }); }
-      renderTasks(); renderDAG(); updateStats();
-      addEvent('task_created', `Task ${msg.task_id || msg.task?.id} submitted`);
-      break;
-    case 'task_started':
-      { const t = tasks.find(t => t.id === msg.task_id || t.task_id === msg.task_id); if (t) { t.status = 'running'; renderTasks(); renderDAG(); } updateStats(); addEvent('task_started', `Task ${msg.task_id} started`); }
-      break;
-    case 'task_completed':
-      { const t = tasks.find(t => t.id === msg.task_id || t.task_id === msg.task_id); if (t) { Object.assign(t, msg.result || {}); renderTasks(); renderDAG(); } updateStats(); addEvent('task_completed', `Task ${msg.task_id} done`); }
-      break;
-    case 'node_status_change':
-      addEvent('node_status_change', `Node ${msg.node_id}: ${msg.old} -> ${msg.new}`);
-      if (nodes.length) { renderNodes(); updateStats(); }
-      break;
-    case 'heartbeat': case 'ping': case 'pong':
-      break;
-    default:
-      if (msg.data && msg.data.monitor) {
-        const nodelist = msg.data.monitor.nodes ? (msg.data.monitor.nodes.list || []) : [];
-        if (nodelist.length) { nodes = nodelist; renderNodes(); updateStats(); }
-      }
+      updateStats();
+      const status = msg.result?.status || 'done';
+      showToast(status === 'success' ? 'success' : 'error',
+                `任务 ${msg.task_id} ${status === 'success' ? '完成' : '失败'}`);
+      addEvent('task_completed', `任务 ${msg.task_id} 完成: ${status}`);
+    },
+    'node_status_change': () => {
+      addEvent('node_status_change', `节点 ${msg.node_id}: ${msg.old} → ${msg.new}`);
+    },
+    'ping': () => {},
+    'pong': () => {},
+    'heartbeat': () => {},
+  };
+
+  const handler = handlers[msg.type];
+  if (handler) handler();
+  else if (msg.data?.monitor) {
+    renderNodes(msg.data.monitor.nodes?.list || []);
+    updateStats();
   }
 }
 
-function renderNodes() {
+// ── 渲染：节点列表 ───────────────────────────────────────────
+function renderNodes(nodeList) {
+  nodes = nodeList;
   const el = document.getElementById('nodeList');
-  if (!nodes || !nodes.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">&#x1F98A;</div>Demo mode - no nodes</div>';
+  const countEl = document.getElementById('nodeCount');
+  countEl.textContent = nodes.length;
+
+  if (!nodes.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🦞</div>
+        <div class="empty-title">Demo 模式</div>
+        <div class="empty-desc">启动节点后将自动显示</div>
+      </div>
+    `;
     return;
   }
+
   el.innerHTML = nodes.map(n => `
-    <div class="node-card">
-      <div class="name"><span class="dot ${n.status === 'online' ? 'online' : 'offline'}"></span>${n.node_id}</div>
-      <div class="meta">${n.cpu ? 'CPU: ' + n.cpu.toFixed(1) + '%' : 'Status: ' + (n.status || 'unknown')}</div>
-      <div class="meta">${n.memory ? 'MEM: ' + n.memory.toFixed(1) + '%' : ''}</div>
-      <div class="meta">Tasks: ${n.tasks_completed || 0}</div>
+    <div class="node-card ${selectedNode === n.node_id ? 'selected' : ''}"
+         onclick="selectNode('${n.node_id}')">
+      <div class="node-header">
+        <div class="node-avatar">🦞</div>
+        <div class="node-name">${n.node_id}</div>
+        <span class="node-status-badge status-${n.status || 'offline'}">
+          ${n.status || 'offline'}
+        </span>
+      </div>
+      <div class="node-meta">
+        <div class="node-stat">
+          <span class="node-stat-label">CPU</span>
+          <span class="node-stat-value">${n.cpu ? n.cpu.toFixed(1) + '%' : '--'}</span>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${Math.min(n.cpu || 0, 100)}%"></div>
+          </div>
+        </div>
+        <div class="node-stat">
+          <span class="node-stat-label">MEM</span>
+          <span class="node-stat-value">${n.memory ? n.memory.toFixed(1) + '%' : '--'}</span>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${Math.min(n.memory || 0, 100)}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="node-capabilities">
+        ${(n.capabilities || []).slice(0, 4).map(c =>
+          `<span class="cap-tag">${c}</span>`
+        ).join('')}
+      </div>
     </div>
   `).join('');
 }
 
+function selectNode(nodeId) {
+  selectedNode = selectedNode === nodeId ? null : nodeId;
+  renderNodes(nodes);
+}
+
+// ── 渲染：任务列表 ───────────────────────────────────────────
 function renderTasks() {
   const el = document.getElementById('taskList');
-  if (!tasks || !tasks.length) { el.innerHTML = '<div class="empty-state">No tasks</div>'; return; }
-  el.innerHTML = tasks.slice().reverse().map(t => `
-    <div class="task-item">
-      <div class="top">
-        <span class="task-id">#${t.id || t.task_id || '?'}</span>
-        <span class="status-tag ${t.status || 'pending'}">${t.status || 'pending'}</span>
+  if (!tasks.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">暂无任务</div>
+        <div class="empty-desc">提交任务后将显示在这里</div>
       </div>
-      <div class="prompt">${t.prompt || t.description || ''}</div>
+    `;
+    return;
+  }
+
+  el.innerHTML = tasks.slice().reverse().map(t => `
+    <div class="task-item ${t.status || 'pending'}" onclick="focusTask('${t.id}')">
+      <div class="task-item-header">
+        <span class="task-id">#${t.id}</span>
+        <span class="task-status">${t.status || 'pending'}</span>
+      </div>
+      <div class="task-prompt">${escapeHtml(t.prompt || t.description || '')}</div>
+      <div class="task-meta">
+        <span class="task-meta-item">
+          <svg class="icon icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          ${t.created_at ? formatTime(t.created_at) : '--'}
+        </span>
+        ${t.mode ? `<span class="task-meta-item">${t.mode}</span>` : ''}
+      </div>
     </div>
   `).join('');
 }
 
+// ── 渲染：DAG ─────────────────────────────────────────────────
 function renderDAG() {
   const canvas = document.getElementById('dagCanvas');
-  if (!tasks || !tasks.length) {
-    canvas.innerHTML = '<div class="empty-state">Submit tasks to see the DAG</div>';
+  const svg = document.getElementById('dagSvg');
+
+  if (!tasks.length) {
+    canvas.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">暂无任务</div>
+        <div class="empty-desc">提交任务后，执行流程将在这里可视化</div>
+      </div>
+    `;
+    svg.innerHTML = '';
     return;
   }
-  canvas.innerHTML = '';
-  const W = 150, H = 60, GAP_X = 80, GAP_Y = 90;
-  const cols = Math.ceil(Math.sqrt(tasks.length));
-  const startX = 20, startY = 20;
-  tasks.forEach((task, i) => {
+
+  const W = 160, H = 70, GAP_X = 90, GAP_Y = 100;
+  const cols = Math.ceil(Math.sqrt(Math.max(tasks.length, 1)));
+  const startX = 30, startY = 20;
+
+  // 渲染节点
+  canvas.innerHTML = tasks.map((task, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
     const x = startX + col * (W + GAP_X);
     const y = startY + row * (H + GAP_Y);
-    const el = document.createElement('div');
-    el.className = 'dag-node ' + (task.status || 'pending');
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
-    el.innerHTML = (task.status === 'running' ? '<span class="spinner"></span>' : '') +
-      (task.status || 'pending') +
-      '<div class="task-id">#' + (task.id || task.task_id || '?') + '</div>';
-    canvas.appendChild(el);
-  });
+    const status = task.status || 'pending';
+
+    return `
+      <div class="dag-node ${status}"
+           id="dag-${task.id}"
+           style="left:${x}px;top:${y}px;width:${W}px;"
+           onclick="focusTask('${task.id}')">
+        <div class="dag-node-header">
+          ${status === 'running' ? '<div class="dag-spinner"></div>' : `<div class="dag-node-status"></div>`}
+          <div class="dag-node-title">${status.toUpperCase()}</div>
+        </div>
+        <div class="dag-node-id">#${task.id}</div>
+      </div>
+    `;
+  }).join('');
+
+  // 渲染连线（SVG）
+  const svgLines = [];
+  for (let i = 1; i < tasks.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const prevCol = (i - 1) % cols;
+    const prevRow = Math.floor((i - 1) / cols);
+
+    const x1 = startX + prevCol * (W + GAP_X) + W / 2;
+    const y1 = startY + prevRow * (H + GAP_Y) + H;
+    const x2 = startX + col * (W + GAP_X) + W / 2;
+    const y2 = startY + row * (H + GAP_Y);
+
+    svgLines.push(`
+      <path class="dag-edge ${tasks[i-1].status === 'success' ? 'active' : ''}"
+            d="M${x1},${y1} C${x1},${y1+30} ${x2},${y2-30} ${x2},${y2}"/>
+      <polygon class="dag-arrow" points="${x2-4},${y2-4} ${x2+4},${y2-4} ${x2},${y2+4}"/>
+    `);
+  }
+  svg.innerHTML = svgLines.join('');
 }
 
+// ── 渲染：事件流 ─────────────────────────────────────────────
 function renderEvents() {
-  const el = document.getElementById('eventLog');
-  if (!events || !events.length) return;
-  el.innerHTML = events.slice(-20).reverse().map(e => {
-    const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '';
-    const msg = e.msg || (e.type === 'task_update' ? `Task ${e.task_id}: ${e.status}` : e.type);
-    return '<div class="event-item ' + e.type + '"><span class="time">' + ts + '</span><span class="msg">' + msg + '</span></div>';
-  }).join('');
+  const el = document.getElementById('eventList');
+  if (!events.length) return;
+
+  el.innerHTML = events.slice(-50).reverse().map(e => `
+    <div class="event-item ${e.type}">
+      <span class="event-time">${formatTime(e.timestamp)}</span>
+      <span class="event-type"></span>
+      <div class="event-content">
+        <span class="event-msg">${escapeHtml(e.msg || e.type)}</span>
+      </div>
+    </div>
+  `).join('');
 }
 
 function addEvent(type, msg) {
   events.push({ type, msg, timestamp: new Date().toISOString() });
-  if (events.length > 100) events.shift();
+  if (events.length > 200) events = events.slice(-150);
   renderEvents();
 }
 
+// ── UI 更新 ───────────────────────────────────────────────────
 function updateStats() {
-  document.getElementById('statNodes').textContent = nodes ? nodes.length : 0;
-  document.getElementById('statOnline').textContent = nodes ? nodes.filter(n => n.status === 'online').length : 0;
-  document.getElementById('statPending').textContent = tasks ? tasks.filter(t => t.status === 'pending' || t.status === 'running').length : 0;
-  document.getElementById('statDone').textContent = tasks ? tasks.filter(t => t.status === 'success' || t.status === 'done').length : 0;
+  animateValue('statNodes', nodes.length);
+  animateValue('statOnline', nodes.filter(n => n.status === 'online').length);
+  animateValue('statPending', tasks.filter(t => t.status === 'pending' || t.status === 'running').length);
+  animateValue('statDone', tasks.filter(t => t.status === 'success' || t.status === 'done').length);
 }
 
-function updateSwarmStatus(swarm) {
-  const badge = document.getElementById('statusBadge');
-  if (!swarm) return;
-  if (swarm.mode === 'demo') { badge.textContent = 'DEMO'; badge.className = 'status-badge demo'; }
-  else if (swarm.initialized) { badge.textContent = 'LIVE'; badge.className = 'status-badge online'; }
-  else { badge.textContent = 'OFFLINE'; badge.className = 'status-badge offline'; }
+function updateClusterStatus(swarm) {
+  const dot = document.getElementById('clusterDot');
+  const badge = document.getElementById('clusterName');
+
+  if (swarm.mode === 'demo') {
+    dot.className = 'cluster-dot demo';
+    badge.textContent = 'Demo';
+  } else if (swarm.initialized) {
+    dot.className = 'cluster-dot';
+    badge.textContent = 'Live';
+  } else {
+    dot.className = 'cluster-dot offline';
+    badge.textContent = 'Offline';
+  }
 }
 
-async function submitTask() {
-  const desc = document.getElementById('taskPrompt').value.trim();
-  if (!desc) return;
+// ── 任务操作 ─────────────────────────────────────────────────
+async function submitTask(e) {
+  e.preventDefault();
+  const prompt = document.getElementById('taskPrompt').value.trim();
+  const type = document.getElementById('taskType').value;
+  if (!prompt) return;
+
   document.getElementById('taskPrompt').value = '';
+
   try {
-    // Send via WebSocket using the specified message format
-    ws.send(JSON.stringify({ type: "submit", description: desc }));
-    addEvent('info', 'Task submitted via WebSocket');
-  } catch(e) {
-    addEvent('error', 'Submit failed: ' + e.message);
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, mode: type }),
+    });
+    const data = await res.json();
+    showToast('info', `任务 ${data.task_id} 已提交`);
+  } catch (err) {
+    showToast('error', '提交失败: ' + err.message);
   }
 }
 
-connect();
-
-// ── ClawChat Integration ────────────────────────────────────────────────────
-const CHAT_BASE = "http://localhost:5002";
-const CHAT_WS   = "ws://localhost:5002/ws";
-const MY_AGENT  = "main-agent";
-const TARGET    = "kimi-claw-01";
-
-let chatWs      = null;
-let chatUnread  = 0;
-let chatOpen    = false;
-let chatConnected = false;
-
-function toggleChat() {
-  chatOpen = !chatOpen;
-  document.getElementById("chatDrawer").classList.toggle("open", chatOpen);
-  if (chatOpen) {
-    chatUnread = 0;
-    document.getElementById("chatBadge").classList.remove("show");
-    document.getElementById("chatInput").focus();
+function focusTask(taskId) {
+  const el = document.getElementById(`dag-${taskId}`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.boxShadow = '0 0 24px rgba(59,130,246,0.6)';
+    setTimeout(() => el.style.boxShadow = '', 1500);
   }
 }
 
-function appendChatMsg(content, sent, sender, ts) {
-  const el = document.getElementById("chatMsgs");
-  // Remove welcome if present
-  const welcome = el.querySelector(".chat-welcome");
-  if (welcome) welcome.remove();
+// ── Tab 切换 ─────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.includes(tab === 'tasks' ? '任务' : '事件'));
+  });
+  document.getElementById('taskList').style.display = tab === 'tasks' ? 'block' : 'none';
+  document.getElementById('eventList').style.display = tab === 'events' ? 'block' : 'none';
+}
 
-  const div = document.createElement("div");
-  div.className = "chat-msg " + (sent ? "sent" : "rcvd");
-  const time = ts ? new Date(ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
-  div.innerHTML = `
-    ${sender ? `<div class="sender">${sender}</div>` : ""}
-    <div>${escapeHtml(content)}</div>
-    ${time ? `<div class="ts">${time}</div>` : ""}
+// ── Toast 通知 ───────────────────────────────────────────────
+function showToast(type, msg) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '!' : 'ℹ'}</span>
+    <span class="toast-msg">${escapeHtml(msg)}</span>
+    <button class="toast-close" onclick="this.parentElement.remove()">×</button>
   `;
-  el.appendChild(div);
-  el.scrollTop = el.scrollHeight;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(16px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+// ── 工具函数 ─────────────────────────────────────────────────
+function formatTime(ts) {
+  if (!ts) return '--:--';
+  try {
+    return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return '--:--';
+  }
 }
 
 function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;");
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
-async function sendChatMsg() {
-  const input = document.getElementById("chatInput");
-  const content = input.value.trim();
-  if (!content || !chatConnected) return;
-  input.value = "";
-  appendChatMsg(content, true, MY_AGENT, new Date().toISOString());
-  try {
-    const body = JSON.stringify({ content, type: "text" });
-    const r = await fetch(`${CHAT_BASE}/send/${MY_AGENT}/${TARGET}`, {
-      method: "POST", body,
-      headers: { "Content-Type": "application/json" }
-    });
-    if (!r.ok) console.warn("send failed", r.status);
-  } catch(e) {
-    console.warn("send error", e);
+function animateValue(id, target) {
+  const el = document.getElementById(id);
+  const current = parseInt(el.textContent) || 0;
+  const diff = target - current;
+  if (diff === 0) return;
+
+  const steps = 10;
+  const increment = diff / steps;
+  let step = 0;
+
+  const animate = () => {
+    step++;
+    el.textContent = Math.round(current + increment * step);
+    if (step < steps) requestAnimationFrame(animate);
+    else el.textContent = target;
+  };
+  requestAnimationFrame(animate);
+}
+
+function refreshAll() {
+  showToast('info', '正在刷新...');
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'ping' }));
   }
 }
 
-async function loadChatHistory() {
-  try {
-    const r = await fetch(`${CHAT_BASE}/conversation/${MY_AGENT}/${TARGET}`);
-    if (!r.ok) return;
-    const data = await r.json();
-    const msgs = data.messages || [];
-    if (!msgs.length) {
-      document.getElementById("chatMsgs").innerHTML =
-        '<div class="chat-welcome">No messages yet. Say hello! &#x1F98A;</div>';
-      return;
-    }
-    document.getElementById("chatMsgs").innerHTML = "";
-    for (const m of msgs) {
-      const sent = m.from_agent === MY_AGENT;
-      appendChatMsg(m.content, sent, m.from_agent, m.created_at);
-    }
-  } catch(e) {
-    document.getElementById("chatMsgs").innerHTML =
-      '<div class="chat-welcome">&#x26A0; Cannot reach ClawChat server<br><small>Is clawchat.py running on port 5002?</small></div>';
-  }
+function updateTime() {
+  document.getElementById('navTime').textContent = new Date().toLocaleTimeString('zh-CN');
 }
 
-function connectChat() {
-  try {
-    chatWs = new WebSocket(CHAT_WS);
-  } catch(e) {
-    // WebSocket not available, fall back to polling
-    setInterval(pollChat, 8000);
-    return;
-  }
-
-  chatWs.onopen = () => {
-    chatConnected = true;
-    document.getElementById("chatDot").className = "dot-online";
-    document.getElementById("chatInput").disabled = false;
-    document.getElementById("chatSendBtn").disabled = false;
-    loadChatHistory();
-  };
-  chatWs.onclose = chatWs.onerror = () => {
-    chatConnected = false;
-    document.getElementById("chatDot").className = "dot-offline";
-    document.getElementById("chatInput").disabled = true;
-    document.getElementById("chatSendBtn").disabled = true;
-    // Reconnect after 5s
-    setTimeout(connectChat, 5000);
-  };
-  chatWs.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      // Only handle direct messages to us
-      if (msg.from_agent && msg.to_agent === MY_AGENT) {
-        appendChatMsg(msg.content || msg.text || "", false, msg.from_agent, msg.created_at);
-        if (!chatOpen) {
-          chatUnread++;
-          const badge = document.getElementById("chatBadge");
-          badge.textContent = chatUnread;
-          badge.classList.add("show");
-        }
-      }
-    } catch(err) {}
-  };
-}
-
-// Fallback polling if WebSocket fails
-async function pollChat() {
-  if (!chatConnected) return;
-  try {
-    const r = await fetch(`${CHAT_BASE}/inbox/${MY_AGENT}`);
-    if (!r.ok) return;
-    const data = await r.json();
-    const newMsgs = data.messages || [];
-    for (const m of newMsgs) {
-      if (m.status !== "read") {
-        appendChatMsg(m.content || m.text || "", false, m.from_agent, m.created_at);
-        if (!chatOpen) {
-          chatUnread++;
-          const badge = document.getElementById("chatBadge");
-          badge.textContent = chatUnread;
-          badge.classList.add("show");
-        }
-      }
-    }
-  } catch(e) {}
-}
-
-connectChat();
+// ─── 初始化 ─────────────────────────────────────────────────────
+connect();
+updateTime();
+setInterval(updateTime, 1000);
 </script>
 </body>
 </html>
