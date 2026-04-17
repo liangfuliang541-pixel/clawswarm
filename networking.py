@@ -133,21 +133,39 @@ class HubAgent:
     Agent 端：运行在 KimiClaw VM 上，HTTP client 连 Hub。
     轮询 Hub 的任务队列，拿到任务后执行，结果 POST 回 Hub。
 
-    用法：
+    用法（原生执行，无 adapter）：
         agent = HubAgent(hub_url="http://<hub-ip>:18080", agent_id="kimi-claw")
         agent.start()
 
-    execute_task() 是入口，子类可覆盖接入真实执行器。
+    用法（通过 adapter 执行）：
+        agent = HubAgent(
+            hub_url="http://<hub-ip>:18080",
+            agent_id="hermes-01",
+            adapter_type="hermes",
+            adapter_config={"hermes_bin": "hermes", "model": "qwen2.5:72b"},
+        )
+        agent.start()
+
+    adapter_type 支持: openclaw, hermes, evolver, None (原生 echo)
     """
 
     def __init__(self, hub_url: str, agent_id: str, capabilities: list = None,
-                 poll_interval: float = 3.0):
+                 poll_interval: float = 3.0,
+                 adapter_type: str = None, adapter_config: dict = None):
         self.hub_url       = hub_url.rstrip("/")
         self.agent_id      = agent_id
-        self.capabilities  = capabilities or ["fetch", "exec", "python", "shell"]
         self.poll_interval = poll_interval
         self._running      = False
         self._thread       = None
+        self._adapter      = None
+
+        # Build adapter if requested
+        if adapter_type:
+            from agent_adapter import get_adapter
+            self._adapter = get_adapter(adapter_type, agent_id, adapter_config or {})
+            self.capabilities = self._adapter.capabilities
+        else:
+            self.capabilities = capabilities or ["fetch", "exec", "python", "shell"]
 
     def _http(self, method: str, path: str, data: dict = None) -> dict:
         import urllib.request, urllib.error
@@ -182,9 +200,13 @@ class HubAgent:
 
     def execute_task(self, task: dict) -> dict:
         """
-        执行单个任务。子类覆盖此方法接入真实执行器。
-        默认行为：简单 echo（可接入 orchestrator/executor）。
+        执行单个任务。
+        如果有 adapter，委托给 adapter.execute()（async → 同步）。
+        否则使用默认 echo 行为。
         """
+        if self._adapter:
+            return self._execute_via_adapter(task)
+        # 原生 echo 行为
         task_type = task.get("type") or task.get("task_type", "general")
         prompt    = task.get("prompt") or task.get("description", "")
         return {
@@ -193,6 +215,22 @@ class HubAgent:
             "status":     "executed",
             "executed_at": datetime.now().isoformat(),
         }
+
+    def _execute_via_adapter(self, task: dict) -> dict:
+        """通过 adapter 执行任务（同步 wrapper）"""
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            # 已有事件循环，用 nest_asyncio 或新线程
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self._adapter.execute(task))
+                return future.result(timeout=300)
+        else:
+            return asyncio.run(self._adapter.execute(task))
 
     def _poll_loop(self):
         print(f"[HubAgent] Polling {self.hub_url} every {self.poll_interval}s")
@@ -211,6 +249,12 @@ class HubAgent:
             time.sleep(self.poll_interval)
 
     def start(self, background: bool = True) -> bool:
+        # 启动 adapter（如果有的话）
+        if self._adapter:
+            if not self._adapter.start():
+                print(f"[HubAgent] Adapter {self._adapter} failed to start")
+                return False
+            print(f"[HubAgent] Adapter started: {self._adapter}")
         ok = self.register()
         if not ok:
             print(f"[HubAgent] Registration failed at {self.hub_url}")
@@ -224,6 +268,8 @@ class HubAgent:
 
     def stop(self):
         self._running = False
+        if self._adapter:
+            self._adapter.stop()
         if self._thread:
             self._thread.join(timeout=5)
 
@@ -405,6 +451,10 @@ if __name__ == "__main__":
     ap.add_argument("--task",       default=None,               help="(client) 要下发的任务描述")
     ap.add_argument("--task-type",  default="fetch",            help="(client) 任务类型")
     ap.add_argument("--poll-interval", type=float, default=3.0, help="轮询间隔（秒）")
+    ap.add_argument("--adapter-type",  default=None,
+                    help="Agent adapter 类型 (hermes/evolver/openclaw)")
+    ap.add_argument("--adapter-config", default=None,
+                    help="Adapter 配置 JSON 字符串，如 '{\"hermes_bin\":\"hermes\"}'")
     args = ap.parse_args()
 
     if args.mode == "hub":
@@ -412,8 +462,12 @@ if __name__ == "__main__":
 
     elif args.mode == "agent":
         caps = [c.strip() for c in args.capabilities.split(",")]
-        agent = HubAgent(hub_url=args.hub_url, agent_id=args.agent_id,
-                         capabilities=caps, poll_interval=args.poll_interval)
+        adapter_config = json.loads(args.adapter_config) if args.adapter_config else None
+        agent = HubAgent(
+            hub_url=args.hub_url, agent_id=args.agent_id,
+            capabilities=caps, poll_interval=args.poll_interval,
+            adapter_type=args.adapter_type, adapter_config=adapter_config,
+        )
         ok = agent.start(background=False)
         if ok:
             try:
