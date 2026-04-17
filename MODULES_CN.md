@@ -27,8 +27,13 @@ observability.py            # OpenTelemetry 可观察性
 events.py                   # WebSocket 事件服务器
 webhook.py                  # Webhook 发送器
 node_api.py                 # 节点 HTTP API（:5171）
-master_api.py               # 主节点 HTTP API（:5000）
-mcp_server.py               # MCP Server：6 tools（spawn/poll/submit/status/nodes/aggregate）
+master_api.py               # 主节点 HTTP API + Hub 嵌入（:50010 + :18080）
+networking.py               # Hub-Spoke 跨公网通信（HubServer + HubAgent + HubClient）
+agent_adapter.py            # 异构 Agent 适配器基类 + 注册表
+hermes_adapter.py           # Hermes ACP 协议适配器（stdin/stdout JSON-RPC 2.0）
+evolver_adapter.py          # Evolver 适配器（sessions_send / 文件轮询）
+openclaw_adapter.py         # 原生 OpenClaw 适配器（HTTP Hub 轮询）
+mcp_server.py               # MCP Server：8 tools
 clawchat.py                 # Agent 间聊天：SQLite + HTTP API + WebSocket（port 5002）
 dashboard/
 ├── dashboard.py            # Web UI 监控面板（FastAPI + WebSocket）
@@ -45,6 +50,8 @@ examples/
 dead_letter.py              # 死信队列 (Phase 2)
 health_scorer.py            # 节点健康评分 (Phase 2)
 result_pipeline.py          # 结果聚合流水线
+spawn_manager.py            # 文件队列 + 后台线程 spawn 管理
+inter_agent_protocol.py     # Agent 间通信协议库
 ```
 
 ---
@@ -550,31 +557,74 @@ result = quick_aggregate(["research", "write"], timeout=60)
 
 ---
 
-### 
-etworking.py — 跨公网 Hub-Spoke 通信模块
+### `networking.py` — 跨公网 Hub-Spoke 通信模块
 
 **架构**：Hub-Spoke 反向轮询模型。Hub 被动接收连接，Agent 主动轮询。
 
-`
-你的电脑（Hub，port 18080） ←———— HTTP 轮询 ———— VM（Agent）
-`
-
 | 组件 | 角色 | 运行位置 |
 |------|------|----------|
-| HubServer | Hub 端，任务队列 + agent 注册 | 你的 Windows |
-| HubAgent | Agent 端，HTTP client 轮询 Hub | KimiClaw VM |
-| HubClient | 主控端 client，主动下发任务 | 你的 Windows |
+| `HubServer` | Hub 端，任务队列 + agent 注册 | 主控机器 |
+| `HubAgent` | Agent 端，HTTP client 轮询 Hub | 远程节点 |
+| `HubClient` | 主控端 client，主动下发任务 | 主控机器 |
 
 **CLI 用法**：
 
-`ash
-# Hub 端（你的 Windows）：python networking.py hub [--port 18080]
-# Agent 端（VM）：python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id kimi-claw
-# 主控端下发任务：python networking.py client --hub-url http://localhost:18081 --task '...' --task-type fetch
-`
+```bash
+# Hub 端
+python networking.py hub [--port 18080]
 
-**关键设计**：
-- Hub 不需要公网 IP（Agent 主动连 Hub）
-- VM 不需要 inbound 端口（只有 outbound HTTP 请求）
-- 任务队列基于文件系统，原子 pop，无 Redis 依赖
-- 轮询间隔可配置（默认 3s）
+# Agent 端（原生）
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id kimi-claw
+
+# Agent 端（Hermes 适配器）
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id hermes-01 \
+  --adapter-type hermes --adapter-config '{"hermes_bin":"hermes"}'
+```
+
+**HubAgent + Adapter 集成**：HubAgent 接受 `adapter_type` 和 `adapter_config` 参数，`execute_task()` 自动委托给对应适配器。
+
+---
+
+### `agent_adapter.py` — 异构 Agent 适配器基类
+
+**职责**：定义 Agent 适配器抽象接口 + 注册表，让 ClawSwarm 能接入不同类型的 Agent。
+
+**抽象接口**：
+```python
+class AgentAdapter(ABC):
+    ADAPTER_TYPE: str
+    def start(self) -> bool
+    def stop(self) -> None
+    async def execute(self, task: dict) -> dict
+    def health_check(self) -> dict
+```
+
+**注册表**：`@register_adapter("hermes")` + `get_adapter("hermes", id, config)`
+
+**已注册适配器**：
+
+| ADAPTER_TYPE | 类 | 协议 |
+|-------------|-----|------|
+| `openclaw` | OpenClawAdapter | HTTP Hub 轮询 |
+| `hermes` | HermesAdapter | ACP stdin/stdout JSON-RPC 2.0 |
+| `evolver` | EvolverAdapter | sessions_send / 文件轮询 |
+
+---
+
+### `hermes_adapter.py` — Hermes ACP 协议适配器
+
+**协议流程**：`hermes acp → //ready → initialize → authenticate → session/new → session/prompt → 结果`
+
+**配置参数**：`hermes_bin`、`model`、`capabilities`
+
+---
+
+### `evolver_adapter.py` — Evolver 适配器
+
+**通信方式**：优先 `sessions_send` 注入，回退文件轮询 `.clawswarm_evolver_tasks/`
+
+---
+
+### `openclaw_adapter.py` — 原生 OpenClaw 适配器
+
+**通信方式**：HTTP POST 注册 → GET 轮询任务 → POST 提交结果

@@ -362,3 +362,34 @@ class CapabilityMatcher:
 | [SANDBOX.md](SANDBOX.md) | 隔离与安全 |
 | [NODE-CONFIG.md](NODE-CONFIG.md) | 节点配置 |
 | [TASK-FORMAT.md](TASK-FORMAT.md) | 任务规范 |
+
+---
+
+## 🌐 Hub-Spoke 跨公网通信 (v0.9+)
+
+无需 tunnel、SSH、公网 IP 的跨机器通信方案。
+
+```
+Hub (port 18080) ←──── HTTP 轮询 ──── Agent (VM/远程)
+```
+
+核心组件：`networking.py`（HubServer + HubAgent + HubClient），嵌入 `master_api.py`。
+
+详见 [MODULES_CN.md](../MODULES_CN.md) networking.py 章节。
+
+---
+
+## 🔌 Agent 适配器架构 (v0.11+)
+
+可插拔适配器层，支持异构 Agent 类型：
+
+```
+HubAgent.execute_task()
+    │
+    ├── adapter_type=None → 原生 echo
+    ├── adapter_type="hermes" → HermesAdapter (ACP JSON-RPC 2.0)
+    ├── adapter_type="evolver" → EvolverAdapter (sessions_send/文件轮询)
+    └── adapter_type="openclaw" → OpenClawAdapter (HTTP Hub)
+```
+
+详见 [MODULES_CN.md](../MODULES_CN.md) 适配器章节。

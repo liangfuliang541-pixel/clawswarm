@@ -162,9 +162,12 @@ Orchestrator（LLM 分解）
 | 版本 | 里程碑 | 状态 |
 |------|---------|------|
 | v0.7 | ClawSwarm Skill + sessions_spawn 集成 | ✅ 已完成 |
-| v0.8 | MCP Server（让龙虾能互相调用工具） | 🔜 下一步 |
-| v0.9 | A2A 协议（龙虾间直接通信） | 📋 规划中 |
-| v1.0 | 共享文件夹即插即用节点 | 📋 规划中 |
+| v0.8 | MCP Server + Dashboard + ClawChat | ✅ 已完成 |
+| v0.9 | Hub-Spoke 跨公网通信 | ✅ 已完成 |
+| v0.10 | Hub 嵌入 master_api + Bug 修复 | ✅ 已完成 |
+| v0.11 | 异构 Agent 适配器（Hermes/Evolver/OpenClaw）| ✅ 已完成 |
+| v0.12 | 远程节点部署 + 真实 e2e 验证 | 🔄 进行中 |
+| v1.0 | 生产就绪 — 共享文件夹即插即用 | 📋 规划中 |
 
 ---
 
@@ -188,6 +191,6 @@ Orchestrator（LLM 分解）
   author = {liangfuliang541-pixel},
   year = {2026},
   url = {https://github.com/liangfuliang541-pixel/clawswarm},
-  version = {0.7.0}
+  version = {0.11.0}
 }
 ```

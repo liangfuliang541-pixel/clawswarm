@@ -9,33 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.11.0] - 2026-04-18
 
 ### Added
-- **`networking.py`** (NEW): 跨公网 Hub-Spoke 通信模块 — HubServer(Hub端) + HubAgent(VM端HTTP client) + HubClient(主控端)，无需 tunnel/SSH/公网IP，Agent 主动轮询 Hub
-- **`clawchat.py`** (NEW): Agent 间实时聊天模块 — SQLite 持久存储 + FastAPI HTTP API (port 5002) + WebSocket 实时推送 + RelayBridge 跨公网桥接
-- **`dashboard/index.html`**: 新增 ClawChat 抽屉面板（右下角聊天气泡按钮，点击展开，实时消息推送）
-- **`ops_manual.md`**: 全面重写 — 包含 Cloudflare Tunnel 安装步骤、ClawChat HTTP API、已知问题修复
+- **`agent_adapter.py`** (NEW): 异构 Agent 适配器基类 — `AgentAdapter` 抽象类 + `@register_adapter` 注册装饰器 + `get_adapter()` 工厂函数
+- **`hermes_adapter.py`** (NEW): Hermes ACP 协议适配器 — stdin/stdout JSON-RPC 2.0，完整 ACP 握手（//ready → initialize → authenticate → session/new → session/prompt）
+- **`evolver_adapter.py`** (NEW): Evolver 适配器 — 优先 `sessions_send` 注入，回退文件轮询 `.clawswarm_evolver_tasks/`
+- **`openclaw_adapter.py`** (NEW): 原生 OpenClaw 适配器 — HTTP Hub 注册 + 轮询
+- **`networking.py`** (UPDATED): HubAgent 集成 adapter — `adapter_type` + `adapter_config` 参数，`execute_task()` 委托给适配器，`start()/stop()` 管理适配器生命周期，CLI `--adapter-type` 和 `--adapter-config` 参数
+- **`master_api.py`** (UPDATED): Hub 嵌入 + ThreadingTCPServer 修复 + `--hub-port` 参数
+
+### Tests
+- `tests/test_agent_adapter.py`: 45 单元测试（适配器基类、注册表、Hermes、Evolver、OpenClaw）
+- `tests/test_hub_agent_adapter.py`: 11 集成测试（HubAgent + adapter 端到端：注册→任务下发→执行→结果提交）
+- Total: 164/164 passed, zero regressions
+
+---
+
+## [0.10.0] - 2026-04-17
+
+### Added
+- **`networking.py`** (NEW): Hub-Spoke 跨公网通信模块 — `HubServer`(Hub端) + `HubAgent`(Agent端 HTTP client) + `HubClient`(主控端)，无需 tunnel/SSH/公网 IP
+- **`spawn_manager.py`** (REWRITTEN): 文件队列 + 后台线程 spawn 管理
+- **`inter_agent_protocol.py`** (NEW): Agent 间通信协议库
+- **`clawchat.py`** (NEW): Agent 间实时聊天 — SQLite + FastAPI + WebSocket + RelayBridge
+- **`demo_viral.py`** (NEW): 3 机并行 viral demo
+- **License**: AGPL → MIT (commit 2fb5556)
 
 ### Fixed
-- **`clawchat.py`**: `get_partners()` 在 `fetchall()` 后关闭连接导致循环中 `conn.execute()` 失败
-- **`clawchat.py`**: `ChatMessage` dataclass 缺少 `thread_id` 字段（write 工具丢失）
-- **`clawchat.py`**: `SELECT *` 导致列顺序不确定 → 改用显式字段列表
-- **`swarm_data/remote_nodes/kimi-claw-01.json`**: relay_url 更新为 Cloudflare Tunnel URL（`loved-able-techno-closely.trycloudflare.com`），serveo 作备用
-
-### Fixed
-- **P0 `classify_task` 关键词匹配歧义**：修复 "write code" 被误判为 report 而非 code
-  - 从 report 关键词列表删除 "write"（与 code 列表 "code" 冲突）
-  - 添加 "report" 回 report 列表（唯一不重叠）
-  - CJK 关键词自由子串匹配 + 单字 2x 加成；英文关键词词边界匹配
-  - 同分时：最长匹配词 > 最后出现者优先
-  - 一句话触发多龙虾并行 spawn → watchdog 收集结果 → 聚合输出
-  - 支持 `--timeout` / `--parallel` / `--dry-run` 参数
-  - 实测：分解"搜索AI最新进展并写报告" → 2个子任务 → sessions_spawn → 结果写入
-
-### Fixed
-- **`orchestrator.py`**: PowerShell GBK 终端 emoji 打印崩溃（`sys.stdout.reconfigure`）
-- **`orchestrator.py`**: 缺少顶层 `import sys`
+- `swarm_scheduler.py` + `swarm_node.py`: 4 critical bugs — `type` builtin shadowing, stale spawn loop, KeyError `task["id"]`, capability map fetch
+- `executor._execute_fetch`: URL extraction from prompt (was concatenating prompt as URL)
+- `master_api.py`: HTTPServer → ThreadingTCPServer (single-threaded blocking fix), serve_forever() try/except
 
 ---
 
@@ -339,60 +343,3 @@ oles.py** (NEW): Agent 角色系统
 | claw_beta | read, write |
 | claw_gamma | search, analyze, report |
 
----
-
-## [0.2.0] - Planned
-
-### Planned Features
-- [ ] Capability-based smart scheduling
-- [ ] Real task execution integration (sessions_spawn, web_fetch)
-- [ ] Task dependency graph
-- [ ] Priority queue support
-- [ ] Result aggregation pipeline
-- [ ] Web dashboard
-
----
-
-## [1.0.0] - Planned (MVP Release)
-
-### Planned Features
-- [ ] Complete task orchestration engine
-- [ ] Multi-machine deployment (SMB/REST)
-- [ ] Failure recovery and retry logic
-- [ ] Comprehensive test suite
-- [ ] OpenClaw Skill integration
-
----
-
-## [2.0.0] - Planned (Product-Ready)
-
-### Planned Features
-- [ ] Cloud-native deployment
-- [ ] Web API (REST + WebSocket)
-- [ ] Task DAG DSL
-- [ ] Advanced scheduling (affinity, load balancing)
-- [ ] Monitoring dashboard
-- [ ] Commercial license option
-
----
-
-## Version History
-
-| Version | Date | Status |
-|---------|------|--------|
-| 0.1.0 | 2026-04-15 | ✅ Released |
-| 0.2.0 | TBD | 🔄 In Progress |
-| 1.0.0 | TBD | 📋 Planned |
-| 2.0.0 | TBD | 📋 Planned |
-
----
-
-## Migration Guides
-
-### Upgrading to 0.2.0
-
-TBD
-
-### Upgrading to 1.0.0
-
-TBD

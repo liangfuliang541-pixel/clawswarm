@@ -1,11 +1,11 @@
-# 🦞 ClawSwarm - 多智能体协同框架
+# 🦞 ClawSwarm - 多智能体协同平台
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.10.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.11.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
-  <img src="https://img.shields.io/badge/tests-108%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-164%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
-  <img src="https://img.shields.io/badge/LOC-18.7k-blueviolet" alt="LOC">
+  <img src="https://img.shields.io/badge/LOC-21.4k-blueviolet" alt="LOC">
 </p>
 
 <div align="center">
@@ -17,8 +17,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-green.svg)](https://www.python.org/)
 [![GitHub stars](https://img.shields.io/github/stars/liangfuliang541-pixel/clawswarm?style=social)](https://github.com/liangfuliang541-pixel/clawswarm/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/liangfuliang541-pixel/clawswarm?style=social)](https://github.com/liangfuliang541-pixel/clawswarm/network)
-[![GitHub issues](https://img.shields.io/github/issues/liangfuliang541-pixel/clawswarm)](https://github.com/liangfuliang541-pixel/clawswarm/issues)
 
 *由 [liangfuliang541-pixel](https://github.com/liangfuliang541-pixel) 用 ❤️ 构建*
 
@@ -33,7 +31,8 @@
 | **零配置启动** | ✅ 纯 JSON | ❌ 需写 Python | ❌ 需写 Python |
 | **无数据库依赖** | ✅ 文件队列 | ❌ 外部服务 | ❌ 外部服务 |
 | **OpenClaw 原生** | ✅ 深度集成 | ❌ | ❌ |
-| **跨机器部署** | ✅ SMB/共享文件夹 | ❌ | ❌ |
+| **跨机器部署** | ✅ Hub-Spoke + SMB | ❌ | ❌ |
+| **异构 Agent 适配** | ✅ Hermes/Evolver/OpenClaw | ❌ | ❌ |
 | **离线容错** | ✅ 本地队列 | ❌ | ❌ |
 | **语音控制** | ✅ 通过 OpenClaw | ❌ | ❌ |
 
@@ -46,6 +45,8 @@
 - 🦞 **多智能体编排** — 并行调度和协调多个 AI Agent
 - 🧠 **能力感知调度** — 根据节点能力智能分配任务
 - 🔀 **DAG 工作流** — 构建依赖图，最大化并行执行
+- 🌐 **Hub-Spoke 网络** — 无需 tunnel/公网 IP 的跨机器通信
+- 🔌 **异构 Agent 适配器** — 接入 Hermes (ACP)、Evolver、OpenClaw Agent
 - 🤖 **MCP Server** — 将 ClawSwarm 暴露为 MCP 工具供其他 Agent 调用
 - 💬 **ClawChat** — Agent 间实时聊天，SQLite 持久存储 + WebSocket 推送
 - 🖥️ **Web 监控面板** — WebSocket 实时推送，监控集群状态，内置聊天面板
@@ -67,94 +68,65 @@ cd clawswarm
 pip install -r requirements.txt
 ```
 
-### 启动 Master + 2 节点
+### 启动 Hub + Agent 节点
+
+```bash
+# 启动 Hub（嵌入 master_api.py）
+python master_api.py --port 50010 --hub-port 18080
+
+# 启动本地 Agent 节点
+python networking.py agent --hub-url http://localhost:18080 --agent-id local-01
+
+# 启动 Hermes Agent 节点（ACP 适配器）
+python networking.py agent --hub-url http://localhost:18080 --agent-id hermes-01 \
+  --adapter-type hermes \
+  --adapter-config '{"hermes_bin":"hermes","model":"qwen2.5:72b"}'
+
+# 通过 HubClient 下发任务
+python networking.py client --hub-url http://localhost:18080 \
+  --task "Fetch https://httpbin.org/json" --task-type fetch
+```
+
+### 或使用经典文件队列
 
 ```bash
 # 方式一：部署脚本（推荐本地）
-./deploy.sh install-deps
-./deploy.sh local
+./deploy.sh install-deps && ./deploy.sh local
 
 # 方式二：Docker Compose（推荐部署）
-cp .env.template .env   # 编辑 .env 填入 API key
-docker compose up -d
+cp .env.template .env && docker compose up -d
 
 # 方式三：手动 CLI
-python cli.py start-cluster                        # 启动3节点演示集群
-python cli.py add-task "调研2026年AI最新进展"         # 添加任务
-python cli.py status                               # 查看状态
-```
-
-### 添加任务
-
-```bash
-# CLI 方式
-python cli.py add-task "调研AI最新进展" --type research --priority 5
-
-# REST API 方式（master 运行中）
-curl -X POST http://localhost:5000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"text":"调研AI最新进展","type":"research","priority":5}'
-```
-
-### 查看状态
-
-```bash
+python cli.py start-cluster
+python cli.py add-task "调研2026年AI最新进展"
 python cli.py status
-# 或通过 REST API
-curl http://localhost:5000/tasks
 ```
-
-### Docker 部署
-
-```bash
-cp .env.template .env
-docker compose up -d
-# Master API:  http://localhost:5000
-# Event WS:    ws://localhost:8765
-# Node Alpha:  http://localhost:5171
-# Node Beta:   http://localhost:5172
-```
-
----
-
-## 💠 一键编排
-
-```bash
-# 分解任务为子任务、入队、并打印供 AI 调用的 spawn 命令
-python orchestrate.py "搜索 AI 新闻并撰写对比报告"
-
-# 交互式演示，支持 4 种预设场景
-python demo.py
-
-# 指定场景
-python demo.py --scenario ai-news
-
-# 自定义任务
-python demo.py --custom "分析 MCP 协议并给出实现建议"
-```
-
-> 设置 `OPENAI_API_KEY` 环境变量可启用 LLM 驱动的任务分解（GPT-4o-mini）。不设置则使用规则引擎。
-
-
-
-## 📖 文档
-
-| 文档 | 说明 |
-|------|------|
-| [📚 架构设计](docs/ARCHITECTURE.md) | 核心技术架构 |
-| [🗺️ 演进路线](docs/EVOLUTION.md) | 从 MVP 到产品化规划 |
-| [📝 任务格式](docs/TASK-FORMAT.md) | 任务 JSON 规范 |
-| [⚙️ 节点配置](docs/NODE-CONFIG.md) | 节点配置指南 |
-| [🔌 API 参考](docs/API.md) | 命令行和 Python API |
-| [🚀 部署指南](docs/DEPLOY.md) | Docker 和本地部署 |
-| [🦞 关于](ABOUT_CN.md) | 项目故事、设计理念与发展路线 |
-| [🗺️ 模块索引](MODULES_CN.md) | 代码库模块说明 |
-| [🧠 OpenClaw Skill](skill/) | 一键安装到 OpenClaw |
-| [🤖 MCP Server](mcp_server.py) | MCP 协议接入 |
 
 ---
 
 ## 🏗️ 架构
+
+### Hub-Spoke 模型（跨机器）
+
+```
+┌──────────────────────────────────────────────┐
+│              Hub (port 18080)                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
+│  │ Agent    │ │ Task     │ │ Result       │ │
+│  │ Registry │ │ Queue    │ │ Store        │ │
+│  └────┬─────┘ └────▲─────┘ └──────┬───────┘ │
+└───────┼─────────────┼──────────────┼─────────┘
+        │             │              │
+        │    HTTP 轮询 + 提交结果     │
+        │             │              │
+┌───────┴─────┐ ┌────┴─────┐ ┌──────┴───────┐
+│ OpenClaw    │ │ Hermes   │ │ Evolver      │
+│ Agent       │ │ (ACP)    │ │ (Skill)      │
+│ (原生)      │ │ 适配器   │ │ 适配器       │
+└─────────────┘ └──────────┘ └──────────────┘
+```
+
+### 本地文件队列模型
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -178,76 +150,70 @@ python demo.py --custom "分析 MCP 协议并给出实现建议"
 
 ---
 
+## 🔌 Agent 适配器
+
+ClawSwarm 通过可插拔的适配器层支持异构 Agent 类型：
+
+| 适配器 | 协议 | 用途 |
+|--------|------|------|
+| `openclaw` | HTTP Hub 轮询 | 原生 OpenClaw Agent |
+| `hermes` | ACP (stdin/stdout JSON-RPC 2.0) | Nous Research Hermes Agent |
+| `evolver` | sessions_send / 文件轮询 | OpenClaw Evolver Skill Agent |
+
+```python
+from agent_adapter import get_adapter
+
+# 创建 Hermes 适配器
+adapter = get_adapter("hermes", "hermes-01", {
+    "hermes_bin": "hermes",
+    "model": "qwen2.5:72b",
+    "capabilities": ["code", "reason"]
+})
+adapter.start()
+result = await adapter.execute({"prompt": "写一个斐波那契函数"})
+```
+
+---
+
 ## 🖥️ Dashboard
 
 Web UI 实时监控面板，展示龙虾集群状态、任务 DAG、执行结果。
 
 ```bash
-# 启动（自动连接 MonitorService）
 python dashboard/dashboard.py --port 5000
-
-# 打开浏览器
-# http://localhost:5000
+# 打开 http://localhost:5000
 ```
 
-**功能**：
-- 🐠 节点状态面板（在线/离线/心跳）
-- 📊 统计面板（节点数/在线数/待执行/已完成）
-- ➕ 自然语言提交任务（直接触发执行）
-- 🔀 任务 DAG 可视化（pending → running → success/failed）
-- 📡 实时事件流（WebSocket 推送）
-- 💬 任务列表 + 实时状态更新
-
-**REST API**：
-- `GET /api/status` — 集群整体状态
-- `GET /api/nodes` — 节点列表
-- `GET /api/tasks` — 任务历史
-- `POST /api/tasks` — 提交新任务
-- `WS /ws` — 实时 WebSocket 事件流
+**功能**：节点状态面板、任务 DAG 可视化、实时事件流、内置聊天面板、自然语言任务提交。
 
 ---
 
 ## 🤖 MCP Server
 
-让其他 Agent 通过 MCP (Model Context Protocol) 调用 ClawSwarm。
+让其他 Agent 通过 MCP 协议调用 ClawSwarm。
 
 ```bash
-# 直接运行 MCP 服务器（stdio 模式）
 python mcp_server.py
-
-# 通过 mcporter 调用
-mcporter call --stdio -- python mcp_server.py clawswarm_spawn '{"prompt":"Hello"}'
+# 或通过 mcporter：mcporter call clawswarm.clawswarm_status
 ```
 
-**MCP Tools**：
-
-| Tool | 作用 |
-|------|------|
-| `clawswarm_spawn` | 启动子龙虾执行任务 |
-| `clawswarm_poll` | 轮询等待结果文件 |
-| `clawswarm_submit` | 提交任务到队列 |
-| `clawswarm_status` | 获取集群整体状态 |
-| `clawswarm_nodes` | 列出所有节点 |
-| `clawswarm_aggregate` | 聚合多个结果文件 |
-
-**跨 Agent 调用**：
-
-Claude Code、Cursor、CodeBuddy 等 Agent 可通过 MCP 协议直接调用：
-
-```bash
-# 已注册到 mcporter
-mcporter call clawswarm.clawswarm_submit prompt="test"
-```
+**MCP Tools**：`clawswarm_spawn`、`clawswarm_poll`、`clawswarm_submit`、`clawswarm_status`、`clawswarm_nodes`、`clawswarm_aggregate`、`clawswarm_dead_letter`、`clawswarm_health`
 
 ---
 
-## 📚 Examples
+## 📖 文档
 
-```bash
-python examples/01_quickstart.py   # 快速上手：提交 + 轮询
-python examples/02_parallel.py     # 并行任务：多任务 + 聚合
-python examples/04_mcp_demo.py     # MCP 协议调用示例
-```
+| 文档 | 说明 |
+|------|------|
+| [📚 架构设计](docs/ARCHITECTURE.md) | 核心技术架构 |
+| [🗺️ 演进路线](docs/EVOLUTION.md) | 从 MVP 到产品化规划 |
+| [📝 任务格式](docs/TASK-FORMAT.md) | 任务 JSON 规范 |
+| [⚙️ 节点配置](docs/NODE-CONFIG.md) | 节点配置指南 |
+| [🔌 API 参考](docs/API.md) | 命令行和 Python API |
+| [🚀 部署指南](docs/DEPLOY.md) | Docker 和本地部署 |
+| [🗺️ 模块索引](MODULES_CN.md) | 代码库模块说明 |
+| [🧠 OpenClaw Skill](skill/) | 一键安装到 OpenClaw |
+| [🦞 关于](ABOUT_CN.md) | 项目故事、设计理念与发展路线 |
 
 ---
 
@@ -255,24 +221,9 @@ python examples/04_mcp_demo.py     # MCP 协议调用示例
 
 欢迎贡献！详见 [贡献指南](CONTRIBUTING_CN.md)。
 
-- 🐛 报告问题
-- 💡 提出新功能
-- 📝 提交代码
-- 🌐 翻译文档
-
----
-
 ## 📄 许可证
 
 **MIT** - 见 [LICENSE](LICENSE)
-
----
-
-## 🌍 社区
-
-- 📖 [文档](docs/)
-- 🐛 [问题反馈](https://github.com/liangfuliang541-pixel/clawswarm/issues)
-- 💬 [讨论区](https://github.com/liangfuliang541-pixel/clawswarm/discussions)
 
 ---
 

@@ -1,8 +1,39 @@
 # ClawSwarm 进化蓝图 v2.0
 **版本：** v2.0  
-**日期：** 2026-04-15  
-**状态：** 架构设计  
+**日期：** 2026-04-18  
+**状态：** 持续演进中（v0.11.0 released）  
 **愿景：** 从「共享文件夹脚本」进化为「企业级多Agent协同平台」
+
+> **📊 进度总览**：Phase 1 ✅ | Phase 2 🔄 (Hub-Spoke 完成) | Phase 3 📋
+
+---
+
+## 〇、当前版本（v0.11.0）实际完成情况
+
+| 阶段 | 目标 | 状态 |
+|------|------|------|
+| Phase 1 | 本地多节点 + 能力感知调度 | ✅ 全部完成 |
+| Phase 2 | 局域网/跨公网 + Hub-Spoke | 🔄 Hub-Spoke 完成，SMB 待验证 |
+| Phase 3 | 云端 + 公网 + 适配器 | 🔄 异构适配器已完成，余量待定 |
+
+**已解决（v0.1 缺口 → v0.11 现状）**：
+
+| v0.1 缺口 | v0.11 解决方案 |
+|------------|----------------|
+| 无任务执行能力 | executor.py 5 种模式（fetch/exec/python/spawn/workflow） |
+| 无多节点协作 | 能力感知调度 + DAG 编排 |
+| 无任务依赖图 | orchestrator.py DAG 依赖 |
+| 无跨机器通信 | networking.py Hub-Spoke |
+| 无智能调度 | CAPABILITY_MAP + health_scorer |
+| 无结果聚合 | result_pipeline.py 5 阶段流水线 |
+
+**新增能力（v0.1 未规划）**：
+- 异构 Agent 适配器（Hermes/Evolver/OpenClaw）
+- MCP Server（8 tools）
+- ClawChat Agent 间聊天
+- Web Dashboard
+- OpenTelemetry 可观测性
+- HITL 人工审批
 
 ---
 
@@ -151,97 +182,49 @@ def poll_task(node_id, capabilities):
 |--------|------|------|
 | P0 | 能力感知调度 | ✅ 已完成 |
 | P0 | 主龙虾 add_task 时分配节点 | ✅ 已完成 |
-| P0 | execute_task 接入真实能力 | ✅ 已完成（fetch/exec/python/spawn） |
-| P1 | 多节点并行测试 | ✅ 已完成（84 tests） |
-| P1 | 任务依赖链（后续任务A完成后触发B） | ✅ 已完成（DAG orchestrator） |
-| P1 | MCP Server 协议通信 | ✅ 已完成（v0.8.0，6 tools） |
-| P1 | Web Dashboard 监控面板 | ✅ 已完成（v0.8.0，FastAPI + WebSocket） |
-| P1 | GitHub Actions CI/CD | ✅ 已完成（v0.8.0） |
+| P0 | execute_task 接入真实能力 | ✅ 已完成（5种模式） |
+| P1 | 多节点并行测试 | ✅ 已验证 |
+| P1 | 任务依赖链（后续任务A完成后触发B） | ✅ 已完成（DAG） |
 | P2 | 节点能力注册时自检 | ✅ 已完成 |
-| P2 | OpenClaw Skill 集成 | ✅ 已完成（v0.7.0） |
 
 ---
 
-## 四、Phase 2 — 局域网多机器（2-4周目标）
+## 四、Phase 2 — 局域网多机器（✅ 大部分完成）
 
 ### 4.1 架构演进
 
-```
-当前：同一台机器，同一个目录
-         D:\claw\swarm\
+**已完成方案：Hub-Spoke 反向轮询（networking.py）**
 
-Phase 2：局域网，多台机器，共享目录
-                    ┌── SMB/UNC路径 ──┐
-  主龙虾 ──────────▶│  \\192.168.x.x\swarm │◀─── 节点A, 节点B, 节点C
-                    └─────────────────┘
+```
+Hub (port 18080, 嵌入 master_api.py)
+    │
+    ├── HTTP 轮询 ←── OpenClaw Agent (native)
+    ├── HTTP 轮询 ←── Hermes Agent (ACP adapter)
+    └── HTTP 轮询 ←── Evolver Agent (Skill adapter)
 ```
 
-**方案A：SMB共享（最简单）**
+**SMB 共享目录方案（待验证）**：
 ```python
 BASE_DIR = r"\\192.168.1.100\swarm"   # 主服务器的共享目录
 ```
-- 优点：零代码改造，目录结构不变
-- 缺点：需要同一局域网，文件锁性能差
-- 适用：家庭/办公室局域网
 
-**方案B：REST API（推荐）**
-```python
-# 每个节点运行一个轻量HTTP服务
-# 主龙虾通过HTTP请求推送任务
-
-NodeAPI:
-  POST /poll          → 获取分配给自己的任务
-  POST /complete      → 提交结果
-  GET  /status        → 健康检查
-  GET  /heartbeat     → 心跳上报
-```
-
-### 4.2 节点HTTP服务（swarm_node_api.py）
-
-```python
-# swarm_node_api.py — 节点侧HTTP服务
-from flask import Flask, request, jsonify
-
-app = Flask(__name__)
-LOCAL_QUEUE = r"D:\claw\swarm\node_local_queue"
-
-@app.route("/poll", methods=["POST"])
-def poll():
-    node_id = request.json.get("node_id")
-    task = find_local_task(node_id)
-    if task:
-        mark_in_progress(task["id"])
-        return jsonify({"status": "ok", "task": task})
-    return jsonify({"status": "no_task"})
-
-@app.route("/complete", methods=["POST"])
-def complete():
-    task_id  = request.json["task_id"]
-    result   = request.json["result"]
-    save_result(task_id, result)
-    notify_master(task_id, result)   # 通知主龙虾
-    return jsonify({"status": "ok"})
-
-app.run(host="0.0.0.0", port=5171)
-```
-
-### 4.3 主龙虾API服务（swarm_master_api.py）
-
-```python
-# swarm_master_api.py — 主龙虾HTTP服务（供Web界面/其他系统调用）
-@app.route("/tasks", methods=["POST"])       # 创建任务
-@app.route("/tasks", methods=["GET"])        # 列表
-@app.route("/tasks/<id>", methods=["GET"])   # 详情
-@app.route("/tasks/<id>/result", methods=["GET"])  # 结果
-@app.route("/nodes", methods=["GET"])        # 节点列表
-@app.route("/nodes/<id>", methods=["GET"])   # 节点详情
-```
+**Node API（已完成：node_api.py + master_api.py）**：
+- `POST /poll` → 获取分配任务
+- `POST /complete` → 提交结果
+- `GET /health` → 健康检查
 
 ---
 
-## 五、Phase 3 — 云端 + 公网（未来目标）
+## 五、Phase 3 — 云端 + 公网（🔄 部分完成）
 
-### 5.1 最终架构
+### 5.1 已完成
+
+- **异构 Agent 适配器**：Hermes (ACP) + Evolver (Skill) + OpenClaw (HTTP)
+- **MCP Server**：8 tools，stdio JSON-RPC
+- **ClawChat**：Agent 间实时聊天
+- **Dashboard**：Web UI 监控面板
+
+### 5.2 最终架构（目标）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

@@ -181,22 +181,45 @@ HITL_POLICY=always_require
 
 ## 发展路线
 
-### v0.7 — OpenClaw Agent 启动 (next)
-- [ ] `_execute_spawn` → real `sessions_spawn`
-- [ ] 打包为 OpenClaw Skill
-- [ ] `swarm run` from OpenClaw CLI
+### v0.7 — OpenClaw Agent 启动 ✅ 已完成
+- `_execute_spawn` → real `sessions_spawn`
+- 打包为 OpenClaw Skill
+- `swarm run` from OpenClaw CLI
 
-### v0.8 — Web UI 监控面板
-- [ ] FastAPI dashboard (`/dashboard`)
-- [ ] Real-time task status via WebSocket
-- [ ] One-click checkpoint approval
-- [ ] Node health panel
+### v0.8 — Web UI + MCP Server ✅ 已完成
+- FastAPI dashboard (`/dashboard`)
+- MCP Server (8 tools)
+- Real-time task status via WebSocket
+- Node health panel
 
-### v1.0 — 生产就绪
-- [ ] DAG 可视化
-- [ ] Prometheus 指标端点
-- [ ] SMB 共享目录部署 guide
-- [ ] GitHub Actions 持续集成
+### v0.9 — 跨公网通信 ✅ 已完成
+- Hub-Spoke 反向轮询架构
+- networking.py（HubServer + HubAgent + HubClient）
+- ClawChat Agent 间聊天
+
+### v0.10 — Hub 嵌入 + 稳定性修复 ✅ 已完成
+- Hub 嵌入 master_api.py
+- ThreadingTCPServer 修复
+- 4 个关键 Bug 修复
+
+### v0.11 — 异构 Agent 适配器 ✅ 已完成
+- agent_adapter.py 抽象基类 + 注册表
+- hermes_adapter.py (ACP 协议)
+- evolver_adapter.py (sessions_send/文件轮询)
+- openclaw_adapter.py (HTTP Hub 轮询)
+- HubAgent + adapter 集成
+- 164 测试全绿
+
+### v0.12 — 远程节点部署 🔄 进行中
+- VM 安全组开端口
+- Hermes binary 安装 + 真实 e2e
+- Evolver 适配器真实调用
+
+### v1.0 — 生产就绪 📋 规划中
+- DAG 可视化
+- Prometheus 指标端点
+- SMB 共享目录部署 guide
+- GitHub Actions 持续集成
 
 ### 未来规划
 - [ ] LangChain / LlamaIndex 集成

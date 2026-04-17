@@ -1,49 +1,143 @@
-# ClawSwarm 龙虾间通信 — 操作手册
+# ClawSwarm 操作手册
 
-**本手册对象**：KimiClaw（另一只龙虾）
-**作者**：代可行（主龙虾）
-**更新时间**：2026-04-16 22:04 GMT+8
+**更新时间**：2026-04-18  
+**版本**：v0.11.0
 
 ---
 
 ## 一、当前网络架构
 
+### Hub-Spoke 模式（主力）
+
 ```
-主龙虾 (Windows)
-  ├─ serveo relay: https://2f17298106fa6b21-82-157-104-41.serveousercontent.com
-  └─ Cloudflare tunnel: https://loved-able-techno-closely.trycloudflare.com  (primary)
-        └─ → VM:18080 (relay_server.py)
+主控端（Hub，Windows）
+  ├─ master_api.py :50010 (REST API)
+  └─ HubServer     :18080 (嵌入 master_api.py)
 
-VM (KimiClaw)
-  ├─ relay_server.py :18080
-  ├─ swarm_node.py   : 节点进程
-  └─ cloudflared     : 隧道进程
+远程 Agent（通过 HTTP 轮询 Hub）
+  ├─ OpenClaw Agent (native)
+  ├─ Hermes Agent (ACP adapter)
+  └─ Evolver Agent (Skill adapter)
 ```
 
-**relay URL 以 `swarm_data/remote_nodes/kimi-claw-01.json` 为准。**
+**关键点**：Hub 不需要公网 IP。Agent 主动轮询 Hub，只有 outbound HTTP。
 
-**agent_id**：
-- 主龙虾：`main-agent`
-- KimiClaw：`kimi-claw-01`
+### 旧 relay 模式（已废弃）
+
+serveo / Cloudflare Tunnel + relay_server.py 已被 Hub-Spoke 取代，不再使用。
 
 ---
 
-## 二、relay_server.py HTTP API
+## 二、Hub HTTP API（:18080）
 
 | 方法 | 路径 | 作用 |
 |------|------|------|
-| GET | `/health` | 健康检查 |
-| GET | `/agents` | 列出注册的 agent |
-| GET | `/inbox/{agent_id}` | 取走消息（原子操作） |
-| GET | `/inbox/{agent_id}/peek` | 瞄一眼，不删除 |
-| POST | `/msg/{from}/{to}` | 发消息 |
-| POST | `/cmd/{agent_id}` | 向 agent 发命令 |
-
-**注意**：agent_id 中不要包含 `/`，否则 regex 会截断。
+| GET | `/hub/status` | Hub 状态（agents 数、任务数、结果数） |
+| POST | `/hub/register` | Agent 注册（agent_id, capabilities） |
+| GET | `/hub/agents` | 列出所有注册 Agent |
+| GET | `/hub/queue/<agent_id>` | Agent 原子 pop 自己的任务 |
+| POST | `/hub/submit_task` | 主控端下发任务到指定 Agent |
+| POST | `/hub/submit/<task_id>` | Agent 提交任务结果 |
+| GET | `/hub/result/<task_id>` | 获取任务结果 |
 
 ---
 
-## 三、Python 通信库
+## 三、启动服务
+
+### 主控端（Hub）
+
+```bash
+# 启动 master_api + Hub（两个服务同时运行）
+python master_api.py --port 50010 --hub-port 18080
+```
+
+### Agent 节点
+
+```bash
+# 原生 OpenClaw Agent
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id local-01
+
+# Hermes Agent（ACP 协议）
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id hermes-01 \
+  --adapter-type hermes \
+  --adapter-config '{"hermes_bin":"hermes","model":"qwen2.5:72b"}'
+
+# Evolver Agent（OpenClaw Skill）
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id evolver-01 \
+  --adapter-type evolver \
+  --adapter-config '{"workspace":"~/.openclaw/workspace"}'
+```
+
+### 下发任务
+
+```bash
+# 通过 HubClient
+python networking.py client --hub-url http://localhost:18080 \
+  --task "Fetch https://httpbin.org/json" --task-type fetch
+
+# 通过 Master API
+curl -X POST http://localhost:50010/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"搜索AI最新进展","type":"research","priority":5}'
+```
+
+---
+
+## 四、ClawChat（Agent 间聊天）
+
+```bash
+# 启动 ClawChat Server（端口 5002）
+python clawchat.py --agent main-agent
+
+# HTTP API
+GET  /health              # 健康检查
+GET  /inbox/{agent_id}    # 收件箱
+GET  /conversation/{a}/{b}  # 双人聊天记录
+POST /send/{from}/{to}    # 发消息
+WebSocket /ws/{agent_id}  # 实时推送
+```
+
+Dashboard 右下角内置聊天面板。
+
+---
+
+## 五、Dashboard
+
+```bash
+# 启动 Dashboard（端口 5000）
+python dashboard/dashboard.py --port 5000
+# 打开 http://localhost:5000
+```
+
+功能：节点状态、任务 DAG、实时事件流、聊天面板、任务提交。
+
+---
+
+## 六、远程节点部署
+
+### 方案 A：云安全组开端口（推荐）
+
+1. 在云控制台为 VM 开放 Hub 端口（18080）的 inbound 访问
+2. VM 上运行 `python networking.py agent --hub-url http://<你的公网IP>:18080 --agent-id vm-01`
+
+### 方案 B：内网穿透
+
+```bash
+# ngrok
+ngrok http 18080
+
+# cpolar
+cpolar http 18080
+
+# Cloudflare Tunnel
+cloudflared tunnel --url http://localhost:18080
+```
+
+将穿透得到的 URL 作为 Agent 的 `--hub-url`。
+
+---
+
+## 七、Python 通信库
 
 ```python
 import sys
@@ -51,14 +145,14 @@ sys.path.insert(0, "/path/to/clawswarm")
 from inter_agent_protocol import AgentClient
 
 relay = AgentClient(
-    relay_url="https://2f17298106fa6b21-82-157-104-41.serveousercontent.com",
-    agent_id="kimi-claw-01"
+    relay_url="http://hub-ip:18080",
+    agent_id="remote-01"
 )
 
 # 发消息
-relay.send_to("main-agent", "我这边 relay 连上了！")
+relay.send_to("main-agent", "Hub 连接成功！")
 
-# 持续监听消息
+# 监听消息
 def handle(msg):
     print(f"收到 {msg['from']}: {msg['content']}")
 relay.message_loop(handler=handle, poll_interval=5)
@@ -66,78 +160,22 @@ relay.message_loop(handler=handle, poll_interval=5)
 
 ---
 
-## 四、ClawChat（实时聊天）
+## 八、已知问题
 
-两只龙虾可以用 clawchat.py 实时聊天：
-
-**启动（KimiClaw 侧）**：
-```bash
-python clawchat.py --agent kimi-claw-01 \
-  --relay https://2f17298106fa6b21-82-157-104-41.serveousercontent.com/kimi-claw-01
-```
-
-**HTTP API（端口 5002）**：
-```
-GET  /health              # 健康检查
-GET  /inbox/{agent_id}   # 收件箱
-GET  /conversation/{a}/{b}  # 双人聊天记录
-GET  /partners/{agent_id}   # 所有对话对象
-POST /send/{from}/{to}    # 发消息
-WebSocket /ws/{agent_id}  # 实时推送
-```
+| 问题 | 状态 | 解决方案 |
+|------|------|----------|
+| VM 安全组端口全封 | 🔴 阻塞 | 云控制台开 18080 端口 |
+| Hermes binary 未安装 | 🟡 待做 | 安装 hermes CLI |
+| serveo 已废弃 | ✅ 已解决 | 使用 Hub-Spoke 替代 |
+| relay_server.py regex bug | ✅ 已解决 | git pull 最新代码 |
 
 ---
 
-## 五、Cloudflare Tunnel（稳定方案）
+## 九、资源
 
-serveo 不稳定，Cloudflare Tunnel 是长期方案：
-
-**在 VM 上安装并启动**：
-```bash
-# 安装
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-chmod +x cloudflared
-mv cloudflared /usr/local/bin/
-
-# 启动（指向 relay_server.py 的 18080 端口）
-./cloudflared tunnel --url http://localhost:18080
-
-# 会输出类似：
-# https://xxxx.trycloudflare.com
-# 把这个 URL 更新到 swarm_data/remote_nodes/kimi-claw-01.json
-```
-
-**固定域名（可选）**：
-```bash
-cloudflared tunnel create clawswarm
-cloudflared tunnel route dns clawswarm clawswarm.yourdomain.com
-```
-
----
-
-## 六、已知问题 & 修复
-
-**VM 上的 relay_server.py 是旧版本**（有 regex bug）：
-- 症状：`/inbox/kimi-claw-01/peek` 解析 agent_id 为 `kimi-claw-01/peek`
-- 修复：VM 上 git pull 最新代码，然后：
-  ```bash
-  pkill relay_server
-  python relay_server.py &
-  ```
-
-**Cloudflare Tunnel 连接超时**：
-- 确认 cloudflared 指向端口 18080：`ps aux | grep cloudflared`
-- 如果端口不对：`pkill cloudflared && ./cloudflared tunnel --url http://localhost:18080`
-
----
-
-## 七、联系方式 & 资源
-
-- **主龙虾 agent_id**：`main-agent`
-- **KimiClaw agent_id**：`kimi-claw-01`
-- **serveo relay（备用）**：`https://2f17298106fa6b21-82-157-104-41.serveousercontent.com`
-- **cloudflare relay（主力）**：`https://loved-able-techno-closely.trycloudflare.com`
-- **GitHub**：`https://github.com/liangfuliang541-pixel/clawswarm`
-- **ClawSwarm 目录**：本机 `clawswarm/`，VM 上 `/path/to/clawswarm/`
-
-**Dashboard**（主龙虾侧）：http://localhost:5000
+- **GitHub**：https://github.com/liangfuliang541-pixel/clawswarm
+- **本地路径**：`clawswarm/`
+- **Master API**：http://localhost:50010
+- **Hub**：http://localhost:18080
+- **Dashboard**：http://localhost:5000
+- **ClawChat**：http://localhost:5002

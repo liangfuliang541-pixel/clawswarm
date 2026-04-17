@@ -37,6 +37,32 @@ cd clawswarm
 ./deploy.sh stop
 ```
 
+### 方式二：Hub-Spoke 跨公网部署
+
+```bash
+# 主控端：启动 Hub（嵌入 master_api.py）
+python master_api.py --port 50010 --hub-port 18080
+
+# 远程 Agent（原生模式）
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id remote-01
+
+# 远程 Agent（Hermes 适配器）
+python networking.py agent --hub-url http://<hub-ip>:18080 --agent-id hermes-01 \
+  --adapter-type hermes \
+  --adapter-config '{"hermes_bin":"hermes","model":"qwen2.5:72b"}'
+
+# 下发任务
+python networking.py client --hub-url http://localhost:18080 \
+  --task "Fetch https://httpbin.org/json" --task-type fetch
+
+# 等待结果
+python networking.py client --hub-url http://localhost:18080 \
+  --wait <task_id>
+```
+
+**注意**：如果 Hub 在内网，远程 Agent 需要能访问 Hub 的 18080 端口。
+方案：(1) 云安全组开端口，(2) ngrok/cpolar 内网穿透，(3) Cloudflare Tunnel。
+
 ### 方式三：Dashboard（Web UI 监控）
 
 ```bash

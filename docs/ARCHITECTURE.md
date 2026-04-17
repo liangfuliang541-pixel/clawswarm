@@ -362,3 +362,34 @@ class CapabilityMatcher:
 | [SANDBOX.md](SANDBOX.md) | Isolation & security |
 | [NODE-CONFIG.md](NODE-CONFIG.md) | Node configuration |
 | [TASK-FORMAT.md](TASK-FORMAT.md) | Task specification |
+
+---
+
+## 🌐 Hub-Spoke Networking (v0.9+)
+
+Cross-machine communication without tunnels, SSH, or public IPs.
+
+```
+Hub (port 18080) ←──── HTTP Poll ──── Agent (VM/remote)
+```
+
+Key components: `networking.py` (HubServer + HubAgent + HubClient), embedded in `master_api.py`.
+
+See [MODULES.md](../MODULES.md#networkingpy--跨公网-hub-spoke-通信模块) for full API reference.
+
+---
+
+## 🔌 Agent Adapter Architecture (v0.11+)
+
+Pluggable adapter layer for heterogeneous agent types:
+
+```
+HubAgent.execute_task()
+    │
+    ├── adapter_type=None → native echo
+    ├── adapter_type="hermes" → HermesAdapter (ACP JSON-RPC 2.0)
+    ├── adapter_type="evolver" → EvolverAdapter (sessions_send/file)
+    └── adapter_type="openclaw" → OpenClawAdapter (HTTP Hub)
+```
+
+See [MODULES.md](../MODULES.md#agent_adapterpy--异构-agent-适配器基类) for adapter interface and implementation details.
