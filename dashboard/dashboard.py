@@ -230,15 +230,44 @@ async def get_status():
 
 @app.get("/api/nodes")
 async def get_nodes():
-    """获取节点列表"""
+    """获取节点列表（从 Monitor + Hub 合并）"""
+    nodes = []
+    
+    # 从 Monitor 获取本地节点
     if HAS_CLAWSWARM:
         try:
             monitor = get_monitor()
             status = monitor.get_status()
-            return status.get("nodes", {"total": 0, "online": 0, "list": []})
+            monitor_nodes = status.get("nodes", {}).get("list", [])
+            nodes.extend(monitor_nodes)
         except Exception as e:
-            return {"total": 0, "online": 0, "list": [], "error": str(e)}
-    return {"total": 0, "online": 0, "list": []}
+            print(f"[Dashboard] Monitor error: {e}")
+    
+    # 从 Hub 获取远程 agents
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get("http://localhost:18080/hub/agents", timeout=aiohttp.ClientTimeout(total=3)) as resp:
+                if resp.status == 200:
+                    hub_data = await resp.json()
+                    for agent in hub_data.get("agents", []):
+                        agent_id = agent.get("agent_id") if isinstance(agent, dict) else agent
+                        if not agent_id:
+                            continue
+                        # 检查是否已存在
+                        if not any(n.get("node_id") == agent_id for n in nodes):
+                            nodes.append({
+                                "node_id": agent_id,
+                                "status": "online" if agent.get("idle", True) else "busy",
+                                "capabilities": agent.get("capabilities", ["fetch", "exec", "python"]),
+                                "cpu": 0.0,
+                                "memory": 0.0,
+                                "source": "hub"
+                            })
+    except Exception as e:
+        print(f"[Dashboard] Hub fetch error: {e}")
+    
+    return {"total": len(nodes), "online": len([n for n in nodes if n.get("status") == "online"]), "list": nodes}
 
 
 @app.get("/api/tasks")
