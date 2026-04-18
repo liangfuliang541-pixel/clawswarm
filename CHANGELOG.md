@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-04-19
+
+### Added
+- **`task_queue.py`** (NEW): 高级任务队列 — 优先级排序、指数退避重试、延迟执行、死信队列、磁盘持久化、事件回调
+- **`auth.py`** (NEW): 认证授权系统 — API Key（SHA256 哈希）、JWT（HS256 签名）、RBAC 4 角色权限、速率限制
+- **`metrics.py`** (NEW): Prometheus 兼容指标收集 — Counter/Gauge/Histogram/Summary、注册表、Prometheus 文本导出
+- **`tenant.py`** (NEW): 多租户隔离 — 命名空间、成员管理、配额限制、权限检查
+- **`federated.py`** (NEW): 联邦学习协调器 — FedAvg/FedProx 聚合、轮次管理、节点更新、全局模型
+- **`edge.py`** (NEW): 边缘计算适配器 — HTTP/MQTT/WebSocket/CoAP 协议、心跳监控、发布订阅
+- **`autoscale.py`** (NEW): 自动扩缩容 — 负载感知、冷却策略、弹性伸缩、事件历史
+
+### Changed
+- **`dashboard.py`**: `/api/nodes` 从 Hub 获取已注册 Agent，合并 Monitor + Hub 节点列表
+- **`dashboard/index.html`**: v3.0 功能丰富版 — 任务详情 Modal、节点终端、全局搜索、任务过滤、设置面板、日志标签页
+
+### Stats
+- Python source: **23,001 行** (69 文件)
+- Test code: **2,081 行** (8 文件, 164 tests)
+- Dashboard HTML: **945 行**
+- Documentation: **8,983 行**
+- **Total: 35,010 行**
+
 ---
 
 ## [0.11.0] - 2026-04-18

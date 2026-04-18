@@ -33,6 +33,13 @@ agent_adapter.py            # 异构 Agent 适配器基类 + 注册表
 hermes_adapter.py           # Hermes ACP 协议适配器（stdin/stdout JSON-RPC 2.0）
 evolver_adapter.py          # Evolver 适配器（sessions_send / 文件轮询）
 openclaw_adapter.py         # 原生 OpenClaw 适配器（HTTP Hub 轮询）
+task_queue.py               # 高级任务队列（优先级、重试、延迟、死信队列）
+auth.py                     # 认证授权（API Key、JWT、RBAC 权限）
+metrics.py                  # Prometheus 指标收集（Counter/Gauge/Histogram/Summary）
+tenant.py                   # 多租户隔离（命名空间、RBAC、配额）
+federated.py                # 联邦学习协调器（FedAvg/FedProx 聚合）
+edge.py                     # 边缘计算适配器（HTTP/MQTT/WebSocket/CoAP）
+autoscale.py                # 自动扩缩容（负载感知、冷却策略）
 mcp_server.py               # MCP Server：8 tools
 clawchat.py                 # Agent 间聊天：SQLite + HTTP API + WebSocket（port 5002）
 dashboard/
@@ -695,4 +702,113 @@ hermes acp → //ready → initialize → authenticate → session/new → sessi
 **职责**：封装 Hub HTTP 注册 + 轮询，让原生 OpenClaw Agent 作为 HubAgent 节点。
 
 **通信方式**：HTTP POST 注册 → GET 轮询任务 → POST 提交结果
+
+---
+
+### `task_queue.py` — 高级任务队列 ⚙
+
+**职责**：提供优先级排序、指数退避重试、延迟执行、死信队列的任务调度。
+
+```python
+from task_queue import TaskQueue, TaskPriority
+
+q = TaskQueue()
+task = q.submit('task-1', {'cmd': 'echo hello'}, priority=TaskPriority.HIGH, max_retries=3)
+next_task = q.get_next('worker-1')  # 获取最高优先级任务
+q.complete(next_task.task_id, result='done')
+q.fail('task-1', 'timeout')          # 自动进入重试，3次后进死信队列
+q.retry_dead()                      # 重试所有死信任务
+```
+
+**关键特性**：`heapq` 优先级堆、磁盘持久化、事件回调、延迟调度、配额管理。
+
+---
+
+### `auth.py` — 认证与授权 🔐
+
+**职责**：API Key（SHA256 哈希）+ JWT（HS256 签名）认证，RBAC 四角色权限控制。
+
+```python
+from auth import AuthManager, Permission
+auth = AuthManager()
+key_id, plaintext = auth.create_api_key('my-key', role='operator')
+valid = auth.validate_api_key(plaintext)  # 验证 Key
+token = auth.create_jwt('user-1', role='admin')   # 生成 JWT
+claims = auth.validate_jwt(token)                # 验证 JWT
+```
+
+**4 角色**：`admin`（全部权限）、`operator`（读写+执行）、`viewer`（只读）、`agent`（执行）。
+
+---
+
+### `metrics.py` — Prometheus 指标 📊
+
+**职责**：Prometheus 兼容的指标收集，支持 Counter/Gauge/Histogram/Summary 四种类型。
+
+```python
+from metrics import get_metrics_registry, init_default_metrics
+init_default_metrics()
+r = get_metrics_registry()
+r.counter('tasks_total').inc()
+r.gauge('active_nodes').set(5)
+print(r.to_prometheus())  # 导出 Prometheus 文本格式
+```
+
+---
+
+### `tenant.py` — 多租户隔离 🏢
+
+**职责**：命名空间隔离、成员管理、配额限制、权限检查。
+
+```python
+from tenant import TenantManager
+tm = TenantManager()
+tenant = tm.create_tenant('team-a', 'Team Alpha', 'user1', quotas={'max_nodes': 20})
+tm.add_member(tenant.tenant_id, 'user2', role='member')
+tm.check_permission('user2', tenant.tenant_id, 'task:create')  # True
+```
+
+---
+
+### `federated.py` — 联邦学习协调器 🧠
+
+**职责**：多节点协作训练，不共享原始数据，支持 FedAvg 和 FedProx 聚合。
+
+```python
+from federated import FederatedCoordinator
+fc = FederatedCoordinator()
+model = fc.register_model('mnist-cnn', 'MNIST', aggregation='fed_avg')
+round = fc.start_round(model.model_id, ['node-1', 'node-2'])
+fc.submit_update(model.model_id, 'node-1', round.round_id, weights, num_samples=100)
+result = fc.complete_round(model.model_id, round.round_id)
+```
+
+---
+
+### `edge.py` — 边缘计算适配器 🌐
+
+**职责**：将 IoT 设备接入集群作为轻量 Agent，支持 HTTP/MQTT/WebSocket/CoAP 协议。
+
+```python
+from edge import EdgeAdapter
+ea = EdgeAdapter()
+device = ea.register_device('sensor-01', 'Temp Sensor', 'http', 'http://192.168.1.100:8080',
+                            capabilities=['temperature', 'humidity'])
+ea.start_heartbeat_monitor()  # 启动心跳监控
+```
+
+---
+
+### `autoscale.py` — 自动扩缩容 ⚡
+
+**职责**：基于队列深度和资源使用率自动调整 Agent 池大小。
+
+```python
+from autoscale import AutoScaler, ScalePolicy
+policy = ScalePolicy(min_nodes=1, max_nodes=10, scale_up_threshold=0.7)
+scaler = AutoScaler('pool-1', policy=policy)
+scaler.update_pool_state(current_size=3, pending=15, cpu=70.0)
+scaler.evaluate()  # 判断是否需要扩缩容
+scaler.apply_scaling()  # 执行扩缩容
+```
 

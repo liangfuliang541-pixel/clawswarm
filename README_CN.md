@@ -1,11 +1,11 @@
 # 🦞 ClawSwarm - 多智能体协同平台
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.11.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.12.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
   <img src="https://img.shields.io/badge/tests-164%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
-  <img src="https://img.shields.io/badge/LOC-21.4k-blueviolet" alt="LOC">
+  <img src="https://img.shields.io/badge/LOC-23k-blueviolet" alt="LOC">
 </p>
 
 <div align="center">
@@ -55,6 +55,10 @@
 - ✅ **人工审批点** — 关键任务支持 HITL 人工确认
 - 🐳 **Docker 就绪** — 完整 Docker + Docker Compose 部署支持
 - 🔄 **零依赖** — Phase 1 采用文件队列，无需消息队列
+- 🏢 **多租户** — 命名空间隔离、RBAC 权限、资源配额
+- 🔐 **联邦学习** — 分布式 AI 训练（FedAvg/FedProx 聚合）
+- 🌐 **边缘计算** — IoT 设备适配器（HTTP/MQTT/WebSocket/CoAP）
+- ⚡ **自动扩缩容** — 基于负载弹性伸缩、冷却策略
 
 ---
 

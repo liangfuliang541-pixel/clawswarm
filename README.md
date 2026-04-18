@@ -1,11 +1,11 @@
 # 🦞 ClawSwarm - Multi-Agent Orchestration Platform
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v0.11.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v0.12.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
   <img src="https://img.shields.io/badge/tests-164%20passed-success" alt="Tests">
   <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
-  <img src="https://img.shields.io/badge/LOC-21.4k-blueviolet" alt="LOC">
+  <img src="https://img.shields.io/badge/LOC-23k-blueviolet" alt="LOC">
 </p>
 
 <div align="center">
@@ -55,6 +55,11 @@
 - ✅ **HITL Checkpoint** — Human-in-the-loop approval for critical tasks
 - 🐳 **Docker Ready** — Full Docker + Docker Compose deployment support
 - 🔄 **Zero Dependencies** — File-based queue in Phase 1, no message broker needed
+- 🏢 **Multi-Tenant** — Namespace isolation, RBAC permissions, resource quotas
+- 🔐 **Federated Learning** — Distributed AI training (FedAvg/FedProx aggregation)
+- 🌐 **Edge Computing** — IoT device adapters (HTTP/MQTT/WebSocket/CoAP)
+- ⚡ **Auto-Scaling** — Load-based elastic scaling with cooldown policies
+- 📊 **Auth & Metrics** — API Key/JWT auth, Prometheus metrics, RBAC
 
 ---
 

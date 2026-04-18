@@ -210,12 +210,21 @@ HITL_POLICY=always_require
 - HubAgent + adapter 集成
 - 164 测试全绿
 
-### v0.12 — 远程节点部署 🔄 进行中
+### v0.12 — 企业级基础设施（认证/指标/队列/租户）✅ 已完成
+- 任务队列（优先级/重试/死信队列）
+- 认证授权（API Key/JWT/RBAC）
+- Prometheus 指标收集
+- 多租户命名空间隔离
 - VM 安全组开端口
 - Hermes binary 安装 + 真实 e2e
 - Evolver 适配器真实调用
 
-### v1.0 — 生产就绪 📋 规划中
+### v0.13 — IoT/边缘计算 + 联邦学习 + 自动扩缩容 ✅ 已完成
+- 边缘设备适配器（HTTP/MQTT/WebSocket/CoAP）
+- FedAvg/FedProx 联邦聚合
+- 负载感知弹性伸缩
+
+### v0.14 — 生产就绪 📋 规划中
 - DAG 可视化
 - Prometheus 指标端点
 - SMB 共享目录部署 guide

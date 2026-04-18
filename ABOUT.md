@@ -166,8 +166,9 @@ Orchestrator（LLM 分解）
 | v0.9 | Hub-Spoke 跨公网通信 | ✅ 已完成 |
 | v0.10 | Hub 嵌入 master_api + Bug 修复 | ✅ 已完成 |
 | v0.11 | 异构 Agent 适配器（Hermes/Evolver/OpenClaw）| ✅ 已完成 |
-| v0.12 | 远程节点部署 + 真实 e2e 验证 | 🔄 进行中 |
-| v1.0 | 生产就绪 — 共享文件夹即插即用 | 📋 规划中 |
+| v0.12 | 企业级基础设施（认证/指标/队列/租户）| ✅ 已完成 |
+| v0.13 | IoT/边缘计算 + 联邦学习 + 自动扩缩容 | ✅ 已完成 |
+| v0.14 | 生产就绪 — 共享文件夹即插即用 | 📋 规划中 |
 
 ---
 
@@ -191,6 +192,6 @@ Orchestrator（LLM 分解）
   author = {liangfuliang541-pixel},
   year = {2026},
   url = {https://github.com/liangfuliang541-pixel/clawswarm},
-  version = {0.11.0}
+  version = {0.13.0}
 }
 ```
