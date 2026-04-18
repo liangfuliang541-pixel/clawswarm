@@ -274,7 +274,7 @@ def recover_stale_tasks():
         if not task_id and not task.get("prompt"):
             dst = os.path.join(RESULTS_DIR, fname)
             task["status"]    = "failed"
-            task["error"]    = f"Orphan task (no id/prompt): {reason}"
+            task["error"]    = "Orphan task (no id/prompt)"
             task["failed_at"] = datetime.now().isoformat()
             write_json(dst, task)
             os.remove(fpath)

@@ -471,8 +471,6 @@ class RemoteNodeManager:
                 ]
             }
         """
-        import statistics as stats_module
-
         HEALTH_DIR = BASE_DIR / "health"
         HEALTH_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -696,8 +694,6 @@ def quick_exec(relay_url: str, command: str, wait: bool = True) -> Dict[str, Any
 
 # ── 增强: 兼容新版 relay_server.py 的高级客户端 ──────────────────────────
 
-import threading
-import socket
 import urllib.request
 import urllib.error
 

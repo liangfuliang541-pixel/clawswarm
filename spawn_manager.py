@@ -97,7 +97,17 @@ def _spawn_worker(spawn_id: str, task: str, label: str, timeout: int):
     project_root = Path(__file__).parent.parent.resolve()
     
     GATEWAY_URL = "http://127.0.0.1:28789"
-    TOKEN = os.environ.get("CLAWSWARM_GATEWAY_TOKEN", "92ea9d9f6b4c8fc829486f0e736f721e4280739c94af128a")
+    TOKEN = os.environ.get("CLAWSWARM_GATEWAY_TOKEN", "")
+    if not TOKEN:
+        # 尝试从配置文件读取
+        config_path = Path(__file__).parent / "swarm_config.json"
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    TOKEN = cfg.get("gateway_token", "")
+            except Exception:
+                pass
     
     try:
         import urllib.request, urllib.error

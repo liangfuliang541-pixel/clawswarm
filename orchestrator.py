@@ -33,13 +33,7 @@ try:
 except:
     pass
 
-
 from paths import QUEUE_DIR, RESULTS_DIR, AGENTS_DIR, ensure_dirs, can_node_handle, find_best_node
-
-try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except:
-    pass
 from swarm_scheduler import create_task, get_online_nodes
 
 # LLM 支持（可选，无 API Key 时降级到规则引擎）

@@ -393,8 +393,8 @@ async def get_relay_status():
         return {"error": str(e), "relay_url": RELAY_URL}
 
 
-@app.get("/api/nodes")
-async def get_remote_nodes():
+@app.get("/api/relay/nodes")
+async def get_relay_nodes():
     """获取通过 Relay 注册的远程节点"""
     client = get_relay_client()
     if not client:
